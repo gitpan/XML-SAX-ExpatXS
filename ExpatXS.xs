@@ -13,6 +13,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
+** $Id: ExpatXS.xs,v 1.10 2004/02/18 13:52:05 cvspetr Exp $
 */
 
 
@@ -82,16 +83,15 @@ typedef struct {
 
   /* Callback handlers */
   SV* dflt_sv;
-
   SV* entdcl_sv;
-  /* -pc-
+
+/* not in use anymore, 
   SV* doctyp_sv;
   SV* doctypfin_sv;
-  SV* xmldec_sv; not in use anymore, 
-  */
-
-  SV* unprsd_sv;
+  SV* xmldec_sv; 
   SV* notation_sv;
+  SV* unprsd_sv;
+*/
 
   SV* extent_sv;
   SV* extfin_sv;
@@ -114,8 +114,22 @@ static U32 ValueHash;
 static U32 DataHash;
 static U32 TargetHash;
 static U32 VersionHash;
+static U32 XMLVersionHash;
+static U32 EncodingHash;
+static U32 PublicIdHash;
+static U32 SystemIdHash;
 
 static SV *empty_sv;
+
+static HV* locator;
+
+/* Macro to update document locator */
+#define DL_UPD(p) \
+hv_store(locator,"LineNumber", 10,\
+		  newSViv((IV)XML_GetCurrentLineNumber(p)), 0);\
+hv_store(locator, "ColumnNumber", 12,\
+		  newSViv((IV)XML_GetCurrentColumnNumber(p)+1), 0);
+
 
 /* Forward declarations */
 
@@ -274,51 +288,51 @@ append_error(XML_Parser parser, char * err)
 {
   dSP;
   CallbackVector * cbv;
-  SV ** errstr;
+  HV * exc = newHV();
 
   cbv = (CallbackVector*) XML_GetUserData(parser);
-  errstr = hv_fetch((HV*)SvRV(cbv->self_sv),
-            "ErrorMessage", 12, 0);
 
-  if (errstr && SvPOK(*errstr)) {
-    SV ** errctx = hv_fetch((HV*) SvRV(cbv->self_sv),
-                "ErrorContext", 12, 0);
-    int dopos = !err && errctx && SvOK(*errctx);
+  if (! err)
+       err = (char *) XML_ErrorString(XML_GetErrorCode(parser));
 
-    if (! err)
-      err = (char *) XML_ErrorString(XML_GetErrorCode(parser));
-
-    sv_catpvf(*errstr, "\n%s at line %d, column %d, byte %d%s",
+  char *msg;
+  msg = (char *)malloc(300);
+  sprintf(msg, "%s at line %d, column %d, byte %d",
           err,
           XML_GetCurrentLineNumber(parser),
-          XML_GetCurrentColumnNumber(parser),
-          XML_GetCurrentByteIndex(parser),
-          dopos ? ":\n" : "");
+          XML_GetCurrentColumnNumber(parser)+1,
+          XML_GetCurrentByteIndex(parser));
 
-    if (dopos)
-      {
-    int count;
+  SV **public;	  
+  SV **system;	  
+  public = hv_fetch(locator, "PublicId", 8, 0);
+  system = hv_fetch(locator, "SystemId", 8, 0);
 
-    ENTER ;
-    SAVETMPS ;
-    PUSHMARK(sp);
-    XPUSHs(cbv->self_sv);
-    XPUSHs(*errctx);
-    PUTBACK ;
+  hv_store(exc, "PublicId", 8, 
+           public ? *public : newUTF8SVpv("",0), PublicIdHash);
+  hv_store(exc, "SystemId", 8, 
+	   system ? *system : newUTF8SVpv("",0), SystemIdHash);
+  hv_store(exc, "Message", 7, newUTF8SVpv((char*)msg, 0), 0);
+  hv_store(exc, "Exception", 9, newUTF8SVpv((char*)err, 0), 0);
+  hv_store(exc, "LineNumber", 10, 
+           newSViv((IV)XML_GetCurrentLineNumber(parser)), 0);
+  hv_store(exc, "ColumnNumber", 12, 
+           newSViv((IV)XML_GetCurrentColumnNumber(parser)+1), 0);
 
-    count = perl_call_method("position_in_context", G_SCALAR);
+  hv_store((HV*)SvRV(cbv->self_sv), "ErrorMessage", 12, 
+           newUTF8SVpv((char*)msg, 0), 0);
 
-    SPAGAIN ;
+  ENTER;
+  SAVETMPS;
+  PUSHMARK(sp);
+  EXTEND(sp, 2);
+  PUSHs(cbv->self_sv);
+  PUSHs(newRV_noinc(sv_2mortal((SV*)exc)));
+  PUTBACK;
+  perl_call_method("fatal_error", G_DISCARD);
+  FREETMPS;
+  LEAVE;
 
-    if (count >= 1) {
-      sv_catsv(*errstr, POPs);
-    }
-
-    PUTBACK ;
-    FREETMPS ;
-    LEAVE ;
-      }
-  }
 }  /* End append_error */
 
 
@@ -551,6 +565,8 @@ characterData(void *userData, const char *s, int len)
   CallbackVector* cbv = (CallbackVector*) userData;
   HV *thing;
 
+  DL_UPD(cbv->p) /* document locator updated */
+
   thing = newHV();
 
   ENTER;
@@ -581,6 +597,8 @@ startElement(void *userData, const char *name, const char **atts)
     HV *node;
     SV *element;
     HV *attributes = newHV();
+
+    DL_UPD(cbv->p) /* document locator updated */
 
     if (do_ns) {
         node = gen_ns_node(name, cbv->ns_stack);
@@ -655,6 +673,8 @@ endElement(void *userData, const char *name)
   HV *end_node;
   HE *next;
 
+  DL_UPD(cbv->p) /* document locator updated */
+
   top = av_pop(cbv->context);
 
   ENTER;
@@ -694,6 +714,9 @@ processingInstruction(void *userData, const char *target, const char *data)
 {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
+
+  DL_UPD(cbv->p) /* document locator updated */
+
   HV *thing = newHV();
 
   hv_store(thing, "Target", 6, newUTF8SVpv((char*)target, 0), TargetHash);
@@ -780,6 +803,8 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   dSP;
   CallbackVector* cbv = (CallbackVector*) userdata;
 
+  DL_UPD(cbv->p) /* document locator updated */
+
   ENTER;
   SAVETMPS;
 
@@ -798,6 +823,9 @@ static void
 nsEnd(void *userdata, const XML_Char *prefix) {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userdata;
+
+  DL_UPD(cbv->p) /* document locator updated */
+
   HV *node = newHV();
 
   hv_store(node, "Prefix", 6, (prefix == NULL) ? newUTF8SVpv("", 0) : newUTF8SVpv((char *)prefix, 0), PrefixHash);
@@ -929,12 +957,12 @@ entityDecl(void *data,
 
   hv_store(node, "Name", 4, newUTF8SVpv((char *)name, 0), 0);
   if (pubid) {
-      hv_store(node, "PublicId", 8, newUTF8SVpv((char *)pubid, 0), 0);
+      hv_store(node, "PublicId", 8, newUTF8SVpv((char *)pubid, 0), PublicIdHash);
   }
   else {
-      hv_store(node, "PublicId", 8, &PL_sv_undef, 0);
+      hv_store(node, "PublicId", 8, &PL_sv_undef, PublicIdHash);
   }
-  hv_store(node, "SystemId", 8, newUTF8SVpv((char *)sysid, 0), 0);
+  hv_store(node, "SystemId", 8, newUTF8SVpv((char *)sysid, 0), SystemIdHash);
   
   ENTER;
   SAVETMPS;
@@ -967,8 +995,17 @@ doctypeStart(void *userData,
   HV *node = newHV();
 
   hv_store(node, "Name", 4, newUTF8SVpv((char*)name, 0), NameHash);
-  hv_store(node, "SystemId", 8, sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), 0);
-  hv_store(node, "PublicId", 8, pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), 0);
+  hv_store(node, "SystemId", 8, 
+           sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), SystemIdHash);
+  hv_store(node, "PublicId", 8, 
+           pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), PublicIdHash);
+
+  /* writing to locator */
+  hv_store(locator, "SystemId", 8, 
+           sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), SystemIdHash);
+  hv_store(locator, "PublicId", 8, 
+           pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), PublicIdHash);
+
 
   ENTER;
   SAVETMPS;
@@ -1019,7 +1056,14 @@ xmlDecl(void *userData,
 
 /* 1/0 instead of 'yes'/'no'
   hv_store(node, "Standalone", 10, standalone == -1 ? &PL_sv_undef
-		 : (standalone ? &PL_sv_yes : &PL_sv_no), 0); */
+		 : (standalone ? &PL_sv_yes : &PL_sv_no), 0); 
+*/
+
+  /* writing to locator */
+  hv_store(locator, "XMLVersion", 10, version ? newUTF8SVpv((char*)version, 0) 
+		    : newUTF8SVpv("",0), 0);
+  hv_store(locator, "Encoding", 8, encoding ? newUTF8SVpv((char*)encoding, 0)
+		    : newUTF8SVpv("",0), 0);
 
   ENTER;
   SAVETMPS;
@@ -1048,8 +1092,8 @@ unparsedEntityDecl(void *userData,
   HV *node = newHV();
 
   hv_store(node, "Name", 4, newUTF8SVpv((char*)entity, 0), NameHash);
-  hv_store(node, "PublicId", 8, newUTF8SVpv((char*)pubid, 0), 0);
-  hv_store(node, "SystemId", 8, newUTF8SVpv((char*)sysid, 0), 0);
+  hv_store(node, "PublicId", 8, newUTF8SVpv((char*)pubid, 0), PublicIdHash);
+  hv_store(node, "SystemId", 8, newUTF8SVpv((char*)sysid, 0), SystemIdHash);
   hv_store(node, "Notation", 8, newUTF8SVpv((char*)notation, 0), 0);
 
   ENTER;
@@ -1079,9 +1123,9 @@ notationDecl(void *userData,
 
   hv_store(node, "Name", 4, newUTF8SVpv((char*)name, 0), NameHash);
   hv_store(node, "SystemId", 8, sysid ? newUTF8SVpv((char*)sysid, 0) 
-		 : newUTF8SVpv("",0), 0);
+		 : newUTF8SVpv("",0), SystemIdHash);
   hv_store(node, "PublicId", 8, pubid ? newUTF8SVpv((char*)pubid, 0) 
-		 : newUTF8SVpv("",0), 0);
+		 : newUTF8SVpv("",0), PublicIdHash);
 
   PUSHMARK(sp);
   XPUSHs(cbv->self_sv);
@@ -1340,6 +1384,10 @@ BOOT:
     PERL_HASH(DataHash, "Data", 4);
     PERL_HASH(TargetHash, "Target", 6);
     PERL_HASH(VersionHash, "Version", 7);
+    PERL_HASH(XMLVersionHash, "XMLVersion", 10);
+    PERL_HASH(EncodingHash, "Encoding", 8);
+    PERL_HASH(PublicIdHash, "PublicId", 8);
+    PERL_HASH(SystemIdHash, "SystemId", 8);
     empty_sv = newUTF8SVpv("", 0);
 
 XML_Parser
@@ -1557,6 +1605,22 @@ XML_GetBase(parser)
         ST(0) = &PL_sv_undef;
       }
     }
+
+
+HV *
+XML_GetLocator()
+    CODE:
+    {
+      locator = newHV();
+      hv_store(locator, "LineNumber", 10, newSViv(1), 0);
+      hv_store(locator, "ColumnNumber", 12, newSViv(1), 0);
+
+      RETVAL = locator;
+    }
+
+    OUTPUT:
+    RETVAL
+
 
 void
 XML_PositionContext(parser, lines)

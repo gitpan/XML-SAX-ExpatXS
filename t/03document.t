@@ -27,7 +27,7 @@ sub start_document {
     $self->{data} .= 'start';
 }
 
-sub end_element {
+sub end_document {
     my ($self, $doc) = @_;
     #warn("End:\n");
     #Dump($doc);

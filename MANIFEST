@@ -19,4 +19,7 @@ t/09dtd.t
 t/10prefix.t
 t/11notation.t
 t/12xml-decl.t
+t/13errors.t
+t/14unparsed.t
+t/15locator.t
 typemap

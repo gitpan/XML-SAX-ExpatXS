@@ -1,7 +1,16 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
-0.95
+0.96 February 19, 2004
+    - exceptions (Message, Exception, LineNumber, 
+      ColumnNumber, PublicId, SystemId) sent to ErrorHandler
+    - document locator (LineNumber, ColumnNumber, PublicId, 
+      SystemId, Encoding, XMLVersion) implemented (updated on 
+      start_element, end_element, characters, start_prefix_mapping, 
+      end_prefix_mapping, processing-instruction)
+    - test suite extended
+
+0.95 February 5, 2004
     - renamed to XML::SAX::ExpatXS
     - completed parsing of xml declarations
     - completed start_dtd, end_dtd
@@ -10,6 +19,6 @@ Revision history for Perl extension XML::SAX::ExpatXS
       global destruction" bug when parsing repeatedly
     - test suite extended      
 
-0.90_01
+0.90_01 May 13, 2002
     - Initial release by Matt Sergeant 
       (a working parser).

@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.4 2004/02/05 09:20:23 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.7 2004/02/17 11:22:55 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -7,7 +7,7 @@ use vars qw($VERSION @ISA);
 use XML::SAX::Base;
 use DynaLoader ();
 
-$VERSION = '0.95';
+$VERSION = '0.96';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -64,16 +64,20 @@ sub _parse {
     $args->{Context} = [];
     $args->{ErrorMessage} ||= '';
     $args->{Namespace_Stack} = [[ xml => 'http://www.w3.org/XML/1998/namespace' ]];
+    $args->{Locator} = GetLocator();
     $args->{Parser} = ParserCreate($args, $args->{ProtocolEncoding}, 1);
 
+    $args->set_document_locator($args->{Locator});
     $args->start_document({});
-    my $result = $args->{ParseFunc}->($args->{Parser}, $args->{ParseFuncParam});
+   
+    my $result;
+    $result = $args->{ParseFunc}->($args->{Parser}, $args->{ParseFuncParam});
 
     ParserRelease($args->{Parser});
 
+    my $rv = $args->end_document({}); # end_document is still called on error
     croak($args->{ErrorMessage}) unless $result;
-
-    return $args->end_document({});
+    return $rv;
 }
 
 1;

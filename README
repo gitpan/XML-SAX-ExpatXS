@@ -21,23 +21,31 @@ These PerlSAX callbacks are supported and tested so far:
  end_element()
  characters()
  processing_instruction()
+ start_prefix_mapping()
+ end_prefix_mapping()
+ set_document_locator()
+ fatal_error()
  comment()
  start_dtd()
  end_dtd()
- start_prefix_mapping()
- end_prefix_mapping()
  start_cdata()
  end_cdata()
  notation_decl()
+ unparsed_entity_decl()
 
 (Some other may work as well but hasn't been tested positively yet.)
+
+These methods are never called by XML::SAX::ExpatXS:
+
+ warning()
+ error()
+ ignorable_whitespace()
 
 This one is deprecated but works:
 
  xml_decl()
 
-Major items to be done ASAP:
+Known Issues:
 
- locator interface
- error handling
-
+ - Document locator provides the start position of content events.
+   SAX requires the end position.
