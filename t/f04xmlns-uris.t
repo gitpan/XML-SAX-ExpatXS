@@ -12,11 +12,11 @@ my $xml =<<_xml_;
 _xml_
 
 $parser->parse_string($xml);
-$parser->set_feature('http://xmlns.perl.org/sax/ns-attributes', 0);
+$parser->set_feature('http://xml.org/sax/features/xmlns-uris', 1);
 $parser->parse_string($xml);
 
-#handler->{data};
-ok($handler->{data} eq 'foo({}id/{}xmlns)p:boo({}id/{}p)foo({}id)p:boo({}id)');
+#warn $handler->{data};
+ok($handler->{data} eq 'foo({}id/{}xmlns)p:boo({}id/{}p)foo({http://www.w3.org/2000/xmlns/}xmlns/{}id)p:boo({http://www.w3.org/2000/xmlns/}p/{}id)');
 
 package TestH;
 #use Devel::Peek;

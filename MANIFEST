@@ -56,6 +56,7 @@ t/28parse-uri.t
 t/f01join-chars.t
 t/f02ns-attributes.t
 t/f03locator.t
+t/f04xmlns-uris.t
 t/external.xml
 t/file.xml
 t/file2.xml
