@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /*****************************************************************
 ** ExpatXS.xs
 **
@@ -13,7 +14,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.43 2004/12/14 09:39:46 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.45 2005/03/07 10:32:23 cvspetr Exp $
 */
 
 
@@ -116,10 +117,6 @@ if (SvCUR(buffer) > 0) {\
     sv_setpv(buffer, "");\
 }
 
-/* Macro to get a feature value */
-#define xse_get_feature(fname) \
-SvIV(*(hv_fetch((HV*)SvRV(*(hv_fetch((HV*)SvRV(cbv->self_sv), "Features", 8, 0))), fname, strlen(fname), 0)));
-
 /* Macro to determine current end position */
 #define xse_get_end_position(p, ln, cl, string, len) \
 ln = XML_GetCurrentLineNumber(p); \
@@ -207,6 +204,22 @@ myfree(void *p) {
 }
 
 static XML_Memory_Handling_Suite ms = {mymalloc, myrealloc, myfree};
+
+static int 
+get_feature(CallbackVector *cbv, char *fname)
+{
+    SV ** aux = hv_fetch((HV*)SvRV(cbv->self_sv), "Features", 8, 0);
+    if (! aux) {
+        return 0;
+    } else {
+        aux = hv_fetch((HV*)SvRV(*aux), fname, strlen(fname), 0);
+        if (! aux) {
+            return 0;
+        } else {
+            return SvIV(*aux);
+        }
+    }
+}
 
 static HV*
 add_ns_mapping(AV *ns_stack, char *prefix, char *uri)
@@ -327,7 +340,7 @@ append_error(XML_Parser parser, char * err)
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc(sv_2mortal((SV*)exc)));
+  PUSHs(newRV_noinc((SV*)exc));
   PUTBACK;
   perl_call_method("fatal_error", G_DISCARD);
   FREETMPS;
@@ -877,20 +890,19 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
     myfree(keyname);
   }
 
-
   ENTER;
   SAVETMPS;
-
+  
   PUSHMARK(sp);
   EXTEND(sp, 3);
   PUSHs(cbv->self_sv);
   PUSHs(sv_2mortal(newRV_noinc((SV*)add_ns_mapping(cbv->ns_stack, (char *)prefix, (char *)uri))));
   PUTBACK;
   perl_call_method("start_prefix_mapping", G_DISCARD);
-
+  
   FREETMPS;
   LEAVE;
-
+  
 }  /* End nsStart */
 
 static void
@@ -1244,7 +1256,7 @@ externalEntityRef(XML_Parser parser,
   SAVETMPS ;
 
   /* start_entity */
-  hv_store(start, "Name", 4, *name, NameHash);
+  hv_store(start, "Name", 4, SvREFCNT_inc(*name), NameHash);
 
   PUSHMARK(sp);
   EXTEND(sp, 2);
@@ -1337,7 +1349,6 @@ externalEntityRef(XML_Parser parser,
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
   PUSHs(newRV_noinc((SV*)end));
-  /* PUSHs(newRV_noinc(sv_2mortal((SV*)end))); */
   PUTBACK;
   perl_call_method("end_entity", G_DISCARD);
 
@@ -1501,7 +1512,7 @@ BOOT:
 
 XML_Parser
 XML_ParserCreate(self_sv, enc_sv, namespaces)
-        SV *                    self_sv
+    SV *            self_sv
     SV *            enc_sv
     int            namespaces
     CODE:
@@ -1580,9 +1591,9 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 
       cbv->atts_ready = 0;
       cbv->chrbuffer = newUTF8SVpv("", 0);
-      cbv->feat_join = xse_get_feature("http://xmlns.perl.org/sax/join-character-data");
-      cbv->feat_nsatts = xse_get_feature("http://xmlns.perl.org/sax/ns-attributes");
-      cbv->feat_locator = xse_get_feature("http://xmlns.perl.org/sax/locator");
+      cbv->feat_join = get_feature(cbv, "http://xmlns.perl.org/sax/join-character-data");
+      cbv->feat_nsatts = get_feature(cbv, "http://xmlns.perl.org/sax/ns-attributes");
+      cbv->feat_locator = get_feature(cbv, "http://xmlns.perl.org/sax/locator");
     }
     OUTPUT:
     RETVAL
@@ -1604,18 +1615,14 @@ XML_ParserFree(parser)
     {
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
-      /* SV */ 
-      if (cbv->start_sv)
-	  SvREFCNT_dec(cbv->start_sv);
+      SvREFCNT_dec(cbv->start_sv);
+      SvREFCNT_dec(cbv->end_sv);
+      SvREFCNT_dec(cbv->char_sv);
+      SvREFCNT_dec(cbv->chrbuffer);
+      SvREFCNT_dec(cbv->self_sv);
 
-      if (cbv->end_sv)
-	  SvREFCNT_dec(cbv->end_sv);
-
-      if (cbv->char_sv)
-	  SvREFCNT_dec(cbv->char_sv);
-
-      if (cbv->chrbuffer)
-	  SvREFCNT_dec(cbv->chrbuffer);
+      SvREFCNT_dec(cbv->locator_hv);
+      SvREFCNT_dec(cbv->extern_hv);
 
       Safefree(cbv);
       XML_ParserFree(parser);
@@ -1970,7 +1977,7 @@ XML_LoadEncoding(data, size)
           entry->prefixes_size = pfxsize;
           entry->bytemap_size  = bmsize;
           for (i = 0; i < 256; i++) {
-        entry->firstmap[i] = ntohl(emh->map[i]);
+            entry->firstmap[i] = ntohl(emh->map[i]);
           }
 
           pfx = (PrefixMap *) &data[sizeof(Encmap_Header)];
@@ -2043,7 +2050,7 @@ XML_Do_External_Parse(parser, result)
     SV *                result
     CODE:
     {
-      int type;
+     int type;
 
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 

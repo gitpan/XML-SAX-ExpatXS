@@ -1,6 +1,15 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.06 March 7, 2005
+    - more changes in memory management; 
+      parse_* run in loops without leaks
+      [reported by Rob Bloodgood]
+
+1.05 February 18, 2005
+    - fixed segfault after deleting a key of Features
+      [patch by Pavel Hlavnicka]
+
 1.04 December 15, 2004
     - fixed the bug of SystemId/PublicId of external DTD 
       subset provided instead of identifiers of the current 
