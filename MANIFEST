@@ -56,3 +56,4 @@ t/file.xml
 t/file2.xml
 t/x01zero-bug.t
 typemap
+META.yml                                 Module meta-data (added by MakeMaker)

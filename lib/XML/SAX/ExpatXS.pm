@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.20 2004/07/15 13:09:41 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.21 2004/09/24 12:07:32 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -10,7 +10,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.00';
+$VERSION = '1.01';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);

@@ -10,16 +10,16 @@ README file for Perl extension XML::SAX::ExpatXS
 1.Introduction
 ------------------------------
 
-This module is an XS only implementation of PerlSAX2 parser
-using Expat. XML::SAX::Expat is currently implemented as a layer 
+This module is an XS only implementation of PerlSAX2 parser 
+using Expat. XML::SAX::Expat is implemented as a layer 
 over XML::Parser.
 
-This first version of this module has been created by Matt Sergeant 
-reusing some files from XML::Parser. The current maintainer is 
-Petr Cimprich <petr AT gingerall DOT cz>.
+This first version of this module has been created by Matt 
+Sergeant reusing sources of XML::Parser. The current 
+maintainer is Petr Cimprich <petr AT gingerall DOT cz>.
 
-The wrapper is mostly completed and stable, however it must be 
-used with caution and tested before a production deployment.
+The wrapper is considered stable, however it must be used 
+with caution and tested before a production deployment.
 Feedback of any kind would be appreciated.
 
 

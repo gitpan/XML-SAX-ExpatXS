@@ -1,6 +1,10 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.01 September 24, 2004
+    - memory management check completed, 
+      no more leaks detected
+
 1.00 July 16, 2004
     - relevant memory leaks fixed
     - some more XS code cleanup 

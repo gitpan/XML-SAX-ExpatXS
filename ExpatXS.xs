@@ -13,7 +13,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.34 2004/07/16 13:01:46 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.35 2004/09/10 10:07:27 cvspetr Exp $
 */
 
 
@@ -590,7 +590,7 @@ sendCharacterData(void *userData, SV *buffer)
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc(sv_2mortal((SV*)thing)));
+  PUSHs(sv_2mortal(newRV_noinc((SV*)thing)));
   PUTBACK;
   perl_call_sv(cbv->char_sv, G_DISCARD);
 
@@ -730,7 +730,7 @@ endElement(void *userData, const char *name)
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs( newRV_noinc(sv_2mortal((SV*)end_node)) );
+  PUSHs(sv_2mortal(newRV_noinc((SV*)end_node)));
   PUTBACK;
   perl_call_sv(cbv->end_sv, G_DISCARD);
 
@@ -760,7 +760,7 @@ processingInstruction(void *userData, const char *target, const char *data)
   PUSHMARK(sp);
   EXTEND(sp, 3);
   PUSHs(cbv->self_sv);
-  PUSHs( newRV_noinc(sv_2mortal((SV*)thing)) );
+  PUSHs(sv_2mortal(newRV_noinc((SV*)thing)));
   PUTBACK;
   perl_call_method("processing_instruction", G_DISCARD);
 
@@ -786,7 +786,7 @@ commenthandle(void *userData, const char *string)
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs( newRV_noinc(sv_2mortal((SV*)thing)) );
+  PUSHs(sv_2mortal(newRV_noinc((SV*)thing)));
   PUTBACK;
   perl_call_method("comment", G_DISCARD);
 
@@ -896,7 +896,7 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   PUSHMARK(sp);
   EXTEND(sp, 3);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc((SV*)add_ns_mapping(cbv->ns_stack, (char *)prefix, (char *)uri)));
+  PUSHs(sv_2mortal(newRV_noinc((SV*)add_ns_mapping(cbv->ns_stack, (char *)prefix, (char *)uri))));
   PUTBACK;
   perl_call_method("start_prefix_mapping", G_DISCARD);
 
@@ -923,7 +923,7 @@ nsEnd(void *userdata, const XML_Char *prefix) {
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs( newRV_noinc((SV*)node) );
+  PUSHs(sv_2mortal(newRV_noinc((SV*)node)));
   PUTBACK;
   perl_call_method("end_prefix_mapping", G_DISCARD);
 
@@ -954,7 +954,7 @@ elementDecl(void *data,
   PUSHMARK(sp);
   EXTEND(sp, 3);
   PUSHs(cbv->self_sv);
-  PUSHs( newRV_noinc(sv_2mortal((SV*)thing) ) );
+  PUSHs(sv_2mortal(newRV_noinc((SV*)thing)));
   PUTBACK;
   perl_call_method("element_decl", G_DISCARD);
   FREETMPS;
@@ -999,7 +999,7 @@ attributeDecl(void *data,
   PUSHMARK(sp);
   EXTEND(sp, 5);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc(sv_2mortal((SV*)node) ) );
+  PUSHs(sv_2mortal(newRV_noinc((SV*)node)));
   PUTBACK;
   perl_call_method("attribute_decl", G_DISCARD);
 
@@ -1056,7 +1056,7 @@ entityDecl(void *data,
              pubid ? newUTF8SVpv((char*)pubid, 0) : SvREFCNT_inc(empty_sv), 
 	     PublicIdHash);
 
-    PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
+    PUSHs(sv_2mortal(newRV_noinc((SV*)node)));
     PUTBACK;
     perl_call_method("external_entity_decl", G_DISCARD);
 
@@ -1105,7 +1105,7 @@ doctypeStart(void *userData,
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
+  PUSHs(sv_2mortal(newRV_noinc((SV*)node)));
   PUTBACK;
   perl_call_method("start_dtd", G_DISCARD);
   FREETMPS;
@@ -1163,7 +1163,7 @@ xmlDecl(void *userData,
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
+  PUSHs(sv_2mortal(newRV_noinc((SV*)node)));
   PUTBACK;
   perl_call_method("xml_decl", G_DISCARD);
   FREETMPS;
@@ -1193,7 +1193,7 @@ unparsedEntityDecl(void *userData,
   PUSHMARK(sp);
   EXTEND(sp, 6);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
+  PUSHs(sv_2mortal(newRV_noinc((SV*)node)));
   PUTBACK;
   perl_call_method("unparsed_entity_decl", G_DISCARD);
 
@@ -1220,7 +1220,7 @@ notationDecl(void *userData,
 
   PUSHMARK(sp);
   XPUSHs(cbv->self_sv);
-  XPUSHs(newRV_noinc(sv_2mortal((SV*)node)));
+  XPUSHs(sv_2mortal(newRV_noinc((SV*)node)));
   PUTBACK;
   perl_call_method("notation_decl", G_DISCARD);
 }  /* End notationDecl */
@@ -1267,7 +1267,7 @@ externalEntityRef(XML_Parser parser,
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc(sv_2mortal((SV*)start)));
+  PUSHs(sv_2mortal(newRV_noinc((SV*)start)));
   PUTBACK;
   perl_call_method("start_entity", G_DISCARD);
   SPAGAIN;
