@@ -1,6 +1,18 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.04 December 15, 2004
+    - fixed the bug of SystemId/PublicId of external DTD 
+      subset provided instead of identifiers of the current 
+      entity in Locator and Exception
+      [reported by Bjoern Hoehrmann]
+    - recognized string made available
+      as $p->{ParseOptions}->{RecognizedString}
+    - ParserOptions renamed to ParseOptions to match 
+      XML::SAX::Base
+    - minor fixes for make test
+    - test suite extended
+
 1.03 November 23, 2004
     - minor fixes for make test
 

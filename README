@@ -26,7 +26,7 @@ Feedback of any kind would be appreciated.
 2. Callbacks
 ------------------------------
 
-These PerlSAX callbacks are supported and tested so far:
+These PerlSAX callbacks are supported and tested:
 
  start_document()
  end_document()
@@ -100,7 +100,4 @@ lib/XML/SAX/ExpatXS/Encodings/README for more info.
 4. Known Issues
 ------------------------------
 
- - Document locator provides the start position of content events.
-   SAX requires the end position.
-
- - These callback isn't called yet: skipped_entity()
+ - This callback isn't called yet: skipped_entity()

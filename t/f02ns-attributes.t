@@ -16,7 +16,7 @@ $parser->set_feature('http://xmlns.perl.org/sax/ns-attributes', 0);
 $parser->parse_string($xml);
 
 #warn $handler->{data};
-ok($handler->{data} eq 'foo({}id/{http://www.w3.org/2000/xmlns/}xmlns)p:boo({}id/{http://www.w3.org/2000/xmlns/}p)foo({}id)p:boo({}id)');
+ok($handler->{data} eq 'foo({http://www.w3.org/2000/xmlns/}xmlns/{}id)p:boo({http://www.w3.org/2000/xmlns/}p/{}id)foo({}id)p:boo({}id)');
 
 package TestH;
 #use Devel::Peek;
@@ -28,7 +28,7 @@ sub start_element {
     my ($self, $el) = @_;
     #warn("Start:$el->{Name}:$el->{Attributes}\n");
     #Dump($el);
-    $atts = join('/', keys %{$el->{Attributes}});
+    $atts = join('/', sort keys %{$el->{Attributes}});
     $self->{data} .= "$el->{Name}($atts)";
 }
 

@@ -20,7 +20,7 @@ $parser->set_feature('http://xmlns.perl.org/sax/join-character-data',0);
 $parser->parse_string($xml);
 
 #warn $handler->{data};
-ok($handler->{data} eq '_setDL|1|1|_sd|1|1|_se|3|5|_ch|4|2|_sm|4|26|_se|4|26|_ch|4|30|_ee|4|36|_em|4|36|_ch|5|2|_pi|5|21|_ch|5|22|_ee|6|6|_ed|6|7|utf-8|1.0|pub|sys_setDL|1|1|_sd|1|1|_se|3|5|_ch|3|6|_ch|4|2|_sm|4|26|_se|4|26|_ch|4|30|_ee|4|36|_em|4|36|_ch|4|37|_ch|5|2|_pi|5|21|_ch|5|22|_ee|6|6|_ed|6|7|utf-8|1.0|pub|sys');
+ok($handler->{data} eq '_setDL|1|1|_sd|1|1|_se|3|5|_ch|4|2|_sm|4|26|_se|4|26|_ch|4|30|_ee|4|36|_em|4|36|_ch|5|2|_pi|5|21|_ch|5|22|_ee|6|6|_ed|6|7|utf-8|1.0||_setDL|1|1|_sd|1|1|_se|3|5|_ch|3|6|_ch|4|2|_sm|4|26|_se|4|26|_ch|4|30|_ee|4|36|_em|4|36|_ch|4|37|_ch|5|2|_pi|5|21|_ch|5|22|_ee|6|6|_ed|6|7|utf-8|1.0||');
 
 package TestH;
 #use Devel::Peek;

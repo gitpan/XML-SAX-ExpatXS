@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.25 2004/11/23 12:55:34 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.28 2004/12/14 09:39:46 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -10,7 +10,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.03';
+$VERSION = '1.04';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -77,37 +77,37 @@ sub supported_features {
 
 sub _parse_characterstream {
     my ($self, $fh) = @_;
-    $self->{ParserOptions}{ParseFunc} = \&ParseStream;
-    $self->{ParserOptions}{ParseFuncParam} = $fh;
+    $self->{ParseOptions}->{ParseFunc} = \&ParseStream;
+    $self->{ParseOptions}->{ParseFuncParam} = $fh;
     $self->_parse;
 }
 
 sub _parse_bytestream {
     my ($self, $fh) = @_;
-    $self->{ParserOptions}{ParseFunc} = \&ParseStream;
-    $self->{ParserOptions}{ParseFuncParam} = $fh;
+    $self->{ParseOptions}->{ParseFunc} = \&ParseStream;
+    $self->{ParseOptions}->{ParseFuncParam} = $fh;
     $self->_parse;
 }
 
 sub _parse_string {
     my $self = shift;
-    $self->{ParserOptions}{ParseFunc} = \&ParseString;
-    $self->{ParserOptions}{ParseFuncParam} = $_[0];
+    $self->{ParseOptions}->{ParseFunc} = \&ParseString;
+    $self->{ParseOptions}->{ParseFuncParam} = $_[0];
     $self->_parse;
 }
 
 sub _parse_systemid {
     my $self = shift;
     my $fh = IO::File->new(shift);
-    $self->{ParserOptions}{ParseFunc} = \&ParseStream;
-    $self->{ParserOptions}{ParseFuncParam} = $fh;
+    $self->{ParseOptions}->{ParseFunc} = \&ParseStream;
+    $self->{ParseOptions}->{ParseFuncParam} = $fh;
     $self->_parse;
 }
 
 sub _parse {
     my $self = shift;
 
-    my $args = bless $self->{ParserOptions}, ref($self);
+    my $args = bless $self->{ParseOptions}, ref($self);
 
     # copy handlers over
     $args->{Handler} = $self->{Handler};
@@ -125,7 +125,12 @@ sub _parse {
     $args->{ErrorMessage} ||= '';
     $args->{Namespace_Stack} = [[ xml => 'http://www.w3.org/XML/1998/namespace' ]];
     $args->{Parser} = ParserCreate($args, $args->{ProtocolEncoding}, 1);
-    $args->{Locator} = GetLocator($args->{Parser});
+    $args->{Locator} = GetLocator($args->{Parser}, 
+				  $args->{Source}->{PublicId},
+				  $args->{Source}->{SystemId},
+				  $args->{Source}->{Encoding}
+				 );
+    $args->{RecognizedString} = GetRecognizedString($args->{Parser});
     $args->{ExternEnt} = GetExternEnt($args->{Parser});
 
     # the most common handlers are available as refs

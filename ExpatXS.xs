@@ -13,7 +13,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.41 2004/11/22 11:17:45 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.43 2004/12/14 09:39:46 cvspetr Exp $
 */
 
 
@@ -1079,14 +1079,6 @@ doctypeStart(void *userData,
            pubid ? newUTF8SVpv((char*)pubid, 0) : SvREFCNT_inc(empty_sv), 
 	   PublicIdHash);
 
-  /* writing to locator */
-  hv_store(cbv->locator_hv, "SystemId", 8, 
-           sysid ? newUTF8SVpv((char*)sysid, 0) : SvREFCNT_inc(empty_sv), 
-	   SystemIdHash);
-  hv_store(cbv->locator_hv, "PublicId", 8, 
-           pubid ? newUTF8SVpv((char*)pubid, 0) : SvREFCNT_inc(empty_sv), 
-	   PublicIdHash);
-
   ENTER;
   SAVETMPS;
 
@@ -1142,8 +1134,10 @@ xmlDecl(void *userData,
   /* writing to locator */
   hv_store(cbv->locator_hv, "XMLVersion", 10, version ? 
            newUTF8SVpv((char*)version, 0) : newUTF8SVpv("1.0", 3), XMLVersionHash);
-  hv_store(cbv->locator_hv, "Encoding", 8, encoding ? 
-           newUTF8SVpv((char*)encoding, 0) : newUTF8SVpv("utf-8", 5), EncodingHash);
+  if (SvCUR(*(hv_fetch(cbv->locator_hv, "Encoding", 8, 0))) == 0) {
+    hv_store(cbv->locator_hv, "Encoding", 8, encoding ? 
+             newUTF8SVpv((char*)encoding, 0) : newUTF8SVpv("utf-8",5), EncodingHash);
+  } 
 
   ENTER;
   SAVETMPS;
@@ -1478,9 +1472,11 @@ recString(void *userData, const char *string, int len)
   hv_store(cbv->locator_hv, "LineNumber", 10, newSViv(ln), 0);
   hv_store(cbv->locator_hv, "ColumnNumber", 12, newSViv(cl), 0);
 
-  /* there is no need to keep recstring so far            */
-  /* cbv->recstring = newUTF8SVpvn((char *) string, len); */
-
+  if (SvCUR(cbv->chrbuffer) > 0) {
+    sv_setsv(cbv->recstring, cbv->chrbuffer);
+  } else {
+    sv_setpvn(cbv->recstring, (char *) string, len);
+  }   
 }  /* End recString */
 
 MODULE = XML::SAX::ExpatXS PACKAGE = XML::SAX::ExpatXS    PREFIX = XML_
@@ -1609,9 +1605,6 @@ XML_ParserFree(parser)
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
       /* SV */ 
-      if (cbv->recstring)
-	  SvREFCNT_dec(cbv->recstring);
-
       if (cbv->start_sv)
 	  SvREFCNT_dec(cbv->start_sv);
 
@@ -1747,8 +1740,11 @@ XML_GetBase(parser)
 
 
 HV *
-XML_GetLocator(parser)
+XML_GetLocator(parser, pubid, sysid, encoding)
     XML_Parser            parser
+    SV *		  pubid
+    SV *		  sysid
+    SV *		  encoding
     CODE:
     {
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
@@ -1761,13 +1757,32 @@ XML_GetLocator(parser)
       hv_store(cbv->locator_hv, "XMLVersion", 10, 
                newUTF8SVpv("1.0", 3), XMLVersionHash);
       hv_store(cbv->locator_hv, "Encoding", 8, 
-               newUTF8SVpv("utf-8", 5), EncodingHash);
+               SvCUR(encoding) > 0 ? SvREFCNT_inc(encoding) : newUTF8SVpv("", 0), 
+               EncodingHash);	       
       hv_store(cbv->locator_hv, "SystemId", 8, 
-               SvREFCNT_inc(empty_sv), SystemIdHash);
+               SvCUR(sysid) > 0 ? SvREFCNT_inc(sysid) : newUTF8SVpv("", 0), 
+               SystemIdHash);
       hv_store(cbv->locator_hv, "PublicId", 8, 
-               SvREFCNT_inc(empty_sv), PublicIdHash);
+               SvCUR(pubid) > 0 ? SvREFCNT_inc(pubid) : newUTF8SVpv("", 0), 
+               PublicIdHash);
 
       RETVAL = cbv->locator_hv;
+    }
+
+    OUTPUT:
+    RETVAL
+
+
+SV *
+XML_GetRecognizedString(parser)
+    XML_Parser            parser
+    CODE:
+    {
+      CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+
+      cbv->recstring = newUTF8SVpvn("", 0);
+
+      RETVAL = newRV_noinc(cbv->recstring);
     }
 
     OUTPUT:
@@ -1876,23 +1891,6 @@ XML_DefaultCurrent(parser)
       XML_DefaultCurrent(parser);
     }
 
-SV *
-XML_RecognizedString(parser)
-    XML_Parser            parser
-    CODE:
-    {
-      CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
-
-      if (cbv->recstring) {
-        sv_setpvn(cbv->recstring, "", 0);
-      }
-
-      XML_DefaultCurrent(parser);
-
-      RETVAL = newSVsv(cbv->recstring);
-    }
-    OUTPUT:
-    RETVAL
 
 int
 XML_GetErrorCode(parser)

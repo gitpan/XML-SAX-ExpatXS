@@ -16,7 +16,7 @@ _xml_
 eval { $parser->parse_string($xml) };
 
 #warn $handler->{data};
-ok($handler->{data} eq '_ferr|not well-formed (invalid token) at line 4, column 9, byte 105|not well-formed (invalid token)|4|9|pub|sys');
+ok($handler->{data} eq '_ferr|not well-formed (invalid token) at line 4, column 9, byte 105|not well-formed (invalid token)|4|9||');
 
 package TestH;
 #use Devel::Peek;
