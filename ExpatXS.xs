@@ -13,7 +13,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.35 2004/09/10 10:07:27 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.41 2004/11/22 11:17:45 cvspetr Exp $
 */
 
 
@@ -55,6 +55,7 @@ typedef struct {
   int skip_until;
   int feat_join;
   int feat_nsatts;
+  int feat_locator;
 
   SV *recstring;
   char * delim;
@@ -75,8 +76,6 @@ typedef struct {
   HV* locator_hv;
   HV* extern_hv;  
   SV* chrbuffer;
-  int lclnbff;
-  int lcclbff;
 
 } CallbackVector;
 
@@ -103,22 +102,14 @@ static U32 SystemIdHash;
 
 static SV *empty_sv;
 
-/* Macro to update document locator */
-
-#define xse_locator_upd(p) \
-hv_store(cbv->locator_hv, "LineNumber", 10,\
-		  newSViv((IV)XML_GetCurrentLineNumber(p)), 0);\
-hv_store(cbv->locator_hv, "ColumnNumber", 12,\
-		  newSViv((IV)XML_GetCurrentColumnNumber(p)+1), 0);
+/* These are few macros used within C functions */
 
 /* Macro to generate external entity name key */
-
 #define xse_extern_ent_key(key, base, sysid, pubid) \
 key = strncat(strncat(strncpy(key, base ? base : "", 299), \
 sysid ? sysid : "", 299), pubid ? pubid : "", 299);
 
 /* Macro to emit characters */
-
 #define xse_characters(userData, buffer) \
 if (SvCUR(buffer) > 0) {\
     sendCharacterData(userData, buffer);\
@@ -126,10 +117,17 @@ if (SvCUR(buffer) > 0) {\
 }
 
 /* Macro to get a feature value */
-
 #define xse_get_feature(fname) \
 SvIV(*(hv_fetch((HV*)SvRV(*(hv_fetch((HV*)SvRV(cbv->self_sv), "Features", 8, 0))), fname, strlen(fname), 0)));
 
+/* Macro to determine current end position */
+#define xse_get_end_position(p, ln, cl, string, len) \
+ln = XML_GetCurrentLineNumber(p); \
+cl = XML_GetCurrentColumnNumber(p); \
+for (i = 0; i < len; i++) { \
+  if (string[i] < 0xffffff80 || string[i] > 0xffffffbf) cl++; \
+  if (string[i] == '\n') {if (i < len - 1) {ln++; cl=0;}} \
+};
 
 /* Forward declarations */
 
@@ -570,13 +568,8 @@ sendCharacterData(void *userData, SV *buffer)
   HV *thing;
   SV *data;
 
-  /* document locator updated, locator buffers reseted */
-  hv_store(cbv->locator_hv, "LineNumber", 10, 
-           newSViv((IV)cbv->lclnbff), 0);
-  hv_store(cbv->locator_hv, "ColumnNumber", 12,
-           newSViv((IV)cbv->lcclbff), 0);
-  cbv->lclnbff = -1;
-  cbv->lcclbff = -1;
+  if (cbv->feat_locator && !cbv->feat_join)
+    XML_DefaultCurrent(cbv->p);
 
   thing = newHV();
   /* can't be the same struct as buffer */
@@ -606,15 +599,10 @@ characterData(void *userData, const char *s, int len)
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
 
-  /* buffering locator data */
-  if (cbv->lclnbff == -1) 
-     cbv->lclnbff = XML_GetCurrentLineNumber(cbv->p);
-  if (cbv->lcclbff == -1) 
-     cbv->lcclbff = XML_GetCurrentColumnNumber(cbv->p) + 1;
-
   /* joining character data or not */
   if (cbv->feat_join) {
     sv_catsv(cbv->chrbuffer, sv_2mortal(newUTF8SVpv((char *)s, len)));
+    if (cbv->feat_locator) XML_DefaultCurrent(cbv->p);
 
   } else {
     sendCharacterData(userData, sv_2mortal(newUTF8SVpv((char *)s, len)));
@@ -633,7 +621,7 @@ startElement(void *userData, const char *name, const char **atts)
     SV *element;
 
     xse_characters(userData, cbv->chrbuffer);
-    xse_locator_upd(cbv->p) /* document locator updated */	
+    if (cbv->feat_locator) XML_DefaultCurrent(cbv->p);
 
     if (!cbv->atts_ready) cbv->atts = newHV();
 
@@ -704,7 +692,7 @@ endElement(void *userData, const char *name)
   HE *next;
 
   xse_characters(userData, cbv->chrbuffer);
-  xse_locator_upd(cbv->p) /* document locator updated */
+  if (cbv->feat_locator) XML_DefaultCurrent(cbv->p);
 
   top = av_pop(cbv->context);
 
@@ -748,7 +736,7 @@ processingInstruction(void *userData, const char *target, const char *data)
   HV *thing = newHV();
 
   xse_characters(userData, cbv->chrbuffer);
-  xse_locator_upd(cbv->p) /* document locator updated */
+  if (cbv->feat_locator) XML_DefaultCurrent(cbv->p);
 
   hv_store(thing, "Target", 6, newUTF8SVpv((char*)target, 0), TargetHash);
   if (data)
@@ -842,7 +830,7 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   HV *nsatt = newHV();
 
   xse_characters(userdata, cbv->chrbuffer);
-  xse_locator_upd(cbv->p) /* document locator updated */
+  if (cbv->feat_locator) XML_DefaultCurrent(cbv->p);	
 
   /* NS declarations are reported as common attributes or not */
   if (cbv->feat_nsatts) {
@@ -912,7 +900,7 @@ nsEnd(void *userdata, const XML_Char *prefix) {
   HV *node = newHV();
 
   xse_characters(userdata, cbv->chrbuffer);
-  xse_locator_upd(cbv->p) /* document locator updated */
+  if (cbv->feat_locator) XML_DefaultCurrent(cbv->p);	
 
   hv_store(node, "Prefix", 6, (prefix == NULL) ? SvREFCNT_inc(empty_sv) 
                               : newUTF8SVpv((char *)prefix, 0), PrefixHash);
@@ -1142,7 +1130,7 @@ xmlDecl(void *userData,
   hv_store(node, "Version", 7, version ? newUTF8SVpv((char*)version, 0) 
 		 : SvREFCNT_inc(empty_sv), VersionHash);
   hv_store(node, "Encoding", 8, encoding ? newUTF8SVpv((char*)encoding, 0)
-		 : SvREFCNT_inc(empty_sv), 0);
+		 : SvREFCNT_inc(empty_sv), EncodingHash);
   hv_store(node, "Standalone", 10, standalone == -1 ? &PL_sv_undef
 		 : (standalone ? newUTF8SVpv("yes",0) : newUTF8SVpv("no",0)), 0);
 
@@ -1152,10 +1140,10 @@ xmlDecl(void *userData,
   */
 
   /* writing to locator */
-  hv_store(cbv->locator_hv, "XMLVersion", 10, 
-           version ? newUTF8SVpv((char*)version, 0) : SvREFCNT_inc(empty_sv), 0);
-  hv_store(cbv->locator_hv, "Encoding", 8, 
-           encoding ? newUTF8SVpv((char*)encoding, 0) : SvREFCNT_inc(empty_sv), 0);
+  hv_store(cbv->locator_hv, "XMLVersion", 10, version ? 
+           newUTF8SVpv((char*)version, 0) : newUTF8SVpv("1.0", 3), XMLVersionHash);
+  hv_store(cbv->locator_hv, "Encoding", 8, encoding ? 
+           newUTF8SVpv((char*)encoding, 0) : newUTF8SVpv("utf-8", 5), EncodingHash);
 
   ENTER;
   SAVETMPS;
@@ -1481,14 +1469,18 @@ unknownEncoding(void *unused, const char *name, XML_Encoding *info)
 static void
 recString(void *userData, const char *string, int len)
 {
-  CallbackVector *cbv = (CallbackVector*) userData;
+  int i, ln = 0, cl = 0;
 
-  if (cbv->recstring) {
-    sv_catpvn(cbv->recstring, (char *) string, len);
-  }
-  else {
-    cbv->recstring = newUTF8SVpvn((char *) string, len);
-  }
+  CallbackVector *cbv = (CallbackVector*) userData;
+  xse_get_end_position(cbv->p, ln, cl, string, len);
+  
+  /* printf("-->%d, %d\n", ln, cl); */
+  hv_store(cbv->locator_hv, "LineNumber", 10, newSViv(ln), 0);
+  hv_store(cbv->locator_hv, "ColumnNumber", 12, newSViv(cl), 0);
+
+  /* there is no need to keep recstring so far            */
+  /* cbv->recstring = newUTF8SVpvn((char *) string, len); */
+
 }  /* End recString */
 
 MODULE = XML::SAX::ExpatXS PACKAGE = XML::SAX::ExpatXS    PREFIX = XML_
@@ -1575,6 +1567,11 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 
       XML_SetUnknownEncodingHandler(RETVAL, unknownEncoding, 0);
 
+      if (cbv->no_expand)
+	XML_SetDefaultHandler(RETVAL, recString);
+      else
+	XML_SetDefaultHandlerExpand(RETVAL, recString);
+
       spp = hv_fetch((HV*)SvRV(cbv->self_sv), "ParseParamEnt",
              13, FALSE);
 
@@ -1587,10 +1584,9 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 
       cbv->atts_ready = 0;
       cbv->chrbuffer = newUTF8SVpv("", 0);
-      cbv->lclnbff = -1;
-      cbv->lcclbff = -1;
       cbv->feat_join = xse_get_feature("http://xmlns.perl.org/sax/join-character-data");
       cbv->feat_nsatts = xse_get_feature("http://xmlns.perl.org/sax/ns-attributes");
+      cbv->feat_locator = xse_get_feature("http://xmlns.perl.org/sax/locator");
     }
     OUTPUT:
     RETVAL
@@ -1758,8 +1754,18 @@ XML_GetLocator(parser)
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
       cbv->locator_hv = newHV();
-      hv_store(cbv->locator_hv, "LineNumber", 10, newSViv(1), 0);
-      hv_store(cbv->locator_hv, "ColumnNumber", 12, newSViv(1), 0);
+      hv_store(cbv->locator_hv, "LineNumber", 10, 
+               newSViv(1), 0);
+      hv_store(cbv->locator_hv, "ColumnNumber", 12, 
+               newSViv(1), 0);
+      hv_store(cbv->locator_hv, "XMLVersion", 10, 
+               newUTF8SVpv("1.0", 3), XMLVersionHash);
+      hv_store(cbv->locator_hv, "Encoding", 8, 
+               newUTF8SVpv("utf-8", 5), EncodingHash);
+      hv_store(cbv->locator_hv, "SystemId", 8, 
+               SvREFCNT_inc(empty_sv), SystemIdHash);
+      hv_store(cbv->locator_hv, "PublicId", 8, 
+               SvREFCNT_inc(empty_sv), PublicIdHash);
 
       RETVAL = cbv->locator_hv;
     }

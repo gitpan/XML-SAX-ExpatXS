@@ -6,21 +6,19 @@ my $handler = TestH->new();
 my $parser = XML::SAX::ExpatXS->new( Handler => $handler );
 
 my $xml =<<_xml_;
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "pub" "sys">
+<?xml version="1.0"?>
 <foo>
-  <boo xmlns:pre="ns-uri">koko</boo>
-  <?PItarget PIdata?>
+  <boo>koko</boo>
 </foo>
 _xml_
 
 $parser->parse_string($xml);
 
-$parser->set_feature('http://xmlns.perl.org/sax/join-character-data',0);
+$parser->set_feature('http://xmlns.perl.org/sax/locator',0);
 $parser->parse_string($xml);
 
 #warn $handler->{data};
-ok($handler->{data} eq '_setDL|1|1|_sd|1|1|_se|3|5|_ch|4|2|_sm|4|26|_se|4|26|_ch|4|30|_ee|4|36|_em|4|36|_ch|5|2|_pi|5|21|_ch|5|22|_ee|6|6|_ed|6|7|utf-8|1.0|pub|sys_setDL|1|1|_sd|1|1|_se|3|5|_ch|3|6|_ch|4|2|_sm|4|26|_se|4|26|_ch|4|30|_ee|4|36|_em|4|36|_ch|4|37|_ch|5|2|_pi|5|21|_ch|5|22|_ee|6|6|_ed|6|7|utf-8|1.0|pub|sys');
+ok($handler->{data} eq '_setDL|1|1|_sd|1|1|_se|2|5|_ch|3|2|_se|3|7|_ch|3|11|_ee|3|17|_ch|3|18|_ee|4|6|_ed|4|7|utf-8|1.0||_setDL|1|1|_sd|1|1|_se|1|22|_ch|1|22|_se|1|22|_ch|1|22|_ee|1|22|_ch|1|22|_ee|1|22|_ed|4|7|utf-8|1.0||');
 
 package TestH;
 #use Devel::Peek;
@@ -77,23 +75,3 @@ sub characters {
     $self->{data} .= '|' . $self->{Locator}->{ColumnNumber};
 }
 
-sub start_prefix_mapping {
-    my ($self, $map) = @_;
-    #warn("StartPM:\n");
-    $self->{data} .= '|_sm|' . $self->{Locator}->{LineNumber};
-    $self->{data} .= '|' . $self->{Locator}->{ColumnNumber};
-}
-
-sub end_prefix_mapping {
-    my ($self, $map) = @_;
-    #warn("EndPM:\n");
-    $self->{data} .= '|_em|' . $self->{Locator}->{LineNumber};
-    $self->{data} .= '|' . $self->{Locator}->{ColumnNumber};
-}
-
-sub processing_instruction {
-    my ($self, $pi) = @_;
-    #warn("PI:\n");
-    $self->{data} .= '|_pi|' . $self->{Locator}->{LineNumber};
-    $self->{data} .= '|' . $self->{Locator}->{ColumnNumber};
-}

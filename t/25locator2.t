@@ -6,11 +6,14 @@ my $handler = TestH->new();
 my $parser = XML::SAX::ExpatXS->new( Handler => $handler );
 
 my $xml =<<_xml_;
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "pub" "sys">
+<?xml version="1.0" encoding="iso-8859-2"?>
 <foo>
-  <boo xmlns:pre="ns-uri">koko</boo>
-  <?PItarget PIdata?>
+  <boo att1="val1"
+       att2="val2">
+    koko mato
+    roto pedo
+  </boo>
+  <hoo/>
 </foo>
 _xml_
 
@@ -20,7 +23,7 @@ $parser->set_feature('http://xmlns.perl.org/sax/join-character-data',0);
 $parser->parse_string($xml);
 
 #warn $handler->{data};
-ok($handler->{data} eq '_setDL|1|1|_sd|1|1|_se|3|5|_ch|4|2|_sm|4|26|_se|4|26|_ch|4|30|_ee|4|36|_em|4|36|_ch|5|2|_pi|5|21|_ch|5|22|_ee|6|6|_ed|6|7|utf-8|1.0|pub|sys_setDL|1|1|_sd|1|1|_se|3|5|_ch|3|6|_ch|4|2|_sm|4|26|_se|4|26|_ch|4|30|_ee|4|36|_em|4|36|_ch|4|37|_ch|5|2|_pi|5|21|_ch|5|22|_ee|6|6|_ed|6|7|utf-8|1.0|pub|sys');
+ok($handler->{data} eq '_setDL|1|1|_sd|1|1|_se|2|5|_ch|3|2|_se|4|19|_ch|7|2|_ee|7|8|_ch|8|2|_se|8|8|_ee|8|8|_ch|8|9|_ee|9|6|_ed|9|7|iso-8859-2|1.0||_setDL|1|1|_sd|1|1|_se|2|5|_ch|2|6|_ch|3|2|_se|4|19|_ch|4|20|_ch|5|13|_ch|5|14|_ch|6|13|_ch|6|14|_ch|7|2|_ee|7|8|_ch|7|9|_ch|8|2|_se|8|8|_ee|8|8|_ch|8|9|_ee|9|6|_ed|9|7|iso-8859-2|1.0||');
 
 package TestH;
 #use Devel::Peek;

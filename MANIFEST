@@ -49,8 +49,10 @@ t/21resolve-ent.t
 t/22encoding.t
 t/23el-decl.t
 t/24att-decl.t
+t/25locator2.t
 t/f01join-chars.t
 t/f02ns-attributes.t
+t/f03locator.t
 t/external.xml
 t/file.xml
 t/file2.xml

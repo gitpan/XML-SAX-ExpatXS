@@ -1,6 +1,13 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.02 November 22, 2004
+    - document locator redesigned to fit
+      Perl SAX 2.1 specs
+    - feature 'http://xmlns.perl.org/sax/locator' can turn
+      the document locator off
+    - test suite extended
+
 1.01 September 24, 2004
     - memory management check completed, 
       no more leaks detected

@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.21 2004/09/24 12:07:32 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.24 2004/11/08 10:05:09 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -10,7 +10,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.01';
+$VERSION = '1.02';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -20,6 +20,7 @@ my @supported_features = (
 	'http://xml.org/sax/features/external-general-entities',
 	'http://xmlns.perl.org/sax/join-character-data',
 	'http://xmlns.perl.org/sax/ns-attributes',
+	'http://xmlns.perl.org/sax/locator',
 			 );
 
 #------------------------------------------------------------
@@ -34,6 +35,7 @@ sub new {
     $options->{Features}->{$supported_features[1]} = 1;
     $options->{Features}->{$supported_features[2]} = 1;
     $options->{Features}->{$supported_features[3]} = 1;
+    $options->{Features}->{$supported_features[4]} = 1;
 
     return $proto->SUPER::new($options);
 }
@@ -141,7 +143,8 @@ sub _parse {
 
     ParserFree($args->{Parser});
 
-    my $rv = $args->end_document({}); # end_document is still called on error
+    my $rv = $args->end_document({});   # end_document is still called on error
+
     croak($args->{ErrorMessage}) unless $result;
     return $rv;
 }
@@ -188,7 +191,7 @@ __END__
 
 =head1 NAME
 
-XML::SAX::ExpatXS - PerlSAX2 XS extension to Expat parser
+XML::SAX::ExpatXS - Perl SAX 2 XS extension to Expat parser
 
 =head1 SYNOPSIS
 
@@ -202,8 +205,33 @@ XML::SAX::ExpatXS - PerlSAX2 XS extension to Expat parser
 
 =head1 DESCRIPTION
 
-XML::SAX::ExpatXS is a direct XS extension to Expat XML parser.
-The current version is beta.
+XML::SAX::ExpatXS is a direct XS extension to Expat XML parser. It implements
+Perl SAX 2.1 interface. See http://perl-xml.sourceforge.net/perl-sax/ for
+Perl SAX description.
+
+=head2 Features
+
+The parser behavior can be changed by setting features.
+
+ $parser->set_feature(FEATURE, VALUE);
+
+XML::SAX::ExpatXS provide these features:
+
+=over
+
+=item http://xmlns.perl.org/sax/join-character-data
+
+Consequent character data are joined (1, default) or not (0).
+
+=item http://xmlns.perl.org/sax/ns-attributes
+
+Namespace attributes are reported as common attributes (1, default) or not (0).
+
+=item http://xmlns.perl.org/sax/locator
+
+Document locator is updated (1, default) for ContentHadler events or not (0).
+
+=back
 
 =head1 AUTHORS
 
