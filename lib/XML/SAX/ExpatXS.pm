@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.18 2004/05/15 15:08:44 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.20 2004/07/15 13:09:41 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -10,7 +10,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '0.99';
+$VERSION = '1.00';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -139,7 +139,7 @@ sub _parse {
     my $result;
     $result = $args->{ParseFunc}->($args->{Parser}, $args->{ParseFuncParam});
 
-    ParserRelease($args->{Parser});
+    ParserFree($args->{Parser});
 
     my $rv = $args->end_document({}); # end_document is still called on error
     croak($args->{ErrorMessage}) unless $result;

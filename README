@@ -14,13 +14,13 @@ This module is an XS only implementation of PerlSAX2 parser
 using Expat. XML::SAX::Expat is currently implemented as a layer 
 over XML::Parser.
 
-This module has been created by Matt Sergeant reusing some
-files from XML::Parser. The current maintainer is Petr Cimprich
-<petr AT gingerall DOT cz>.
+This first version of this module has been created by Matt Sergeant 
+reusing some files from XML::Parser. The current maintainer is 
+Petr Cimprich <petr AT gingerall DOT cz>.
 
-It's still not entirely complete. Thought it should work for most
-people's uses, please consider the current version beta for 
-evaluation purposes. Feedback of any kind would be appreciated.
+The wrapper is mostly completed and stable, however it must be 
+used with caution and tested before a production deployment.
+Feedback of any kind would be appreciated.
 
 
 2. Callbacks
@@ -90,7 +90,7 @@ EUC-JP	     (2,3)
 Shift JIS.   (2,3)
 
 (1) Expat built-in
-(2) external hadler
+(2) external handler
 (3) see lib/XML/SAX/ExpatXS/Encodings/Japanese_Encodings.msg
 
 Other encodings can be added with XML::Encoding, see 
@@ -103,5 +103,4 @@ lib/XML/SAX/ExpatXS/Encodings/README for more info.
  - Document locator provides the start position of content events.
    SAX requires the end position.
 
- - These callbacks aren't called yet: 
-   skipped_entity(), element_decl (), attribute_decl ()
+ - These callback isn't called yet: skipped_entity()

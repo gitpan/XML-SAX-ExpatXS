@@ -1,6 +1,10 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.00 July 16, 2004
+    - relevant memory leaks fixed
+    - some more XS code cleanup 
+
 0.99 June 7, 2004
     - element_decl (Name, Model) completed
     - attribute_decl (eName, aName, Type, Mode, Value) completed

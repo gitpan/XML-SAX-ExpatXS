@@ -13,7 +13,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.30 2004/06/07 09:37:08 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.34 2004/07/16 13:01:46 cvspetr Exp $
 */
 
 
@@ -45,25 +45,6 @@
 
 #define NSDELIM  '}'
 
-/* Macro to update handler fields. Used in the various handler setting
-   XSUBS */
-
-#define XMLP_UPD(fld) \
-RETVAL = cbv->fld ? newSVsv(cbv->fld) : &PL_sv_undef;\
-  if (cbv->fld) {\
-    if (cbv->fld != fld)\
-      sv_setsv(cbv->fld, fld);\
-  }\
-  else\
-    cbv->fld = newSVsv(fld)
-
-/* Macro to push old handler value onto return stack. This is done here
-   to get around a bug in 5.004 sv_2mortal function. */
-
-#define PUSHRET \
-  ST(0) = RETVAL;\
-  if (RETVAL != &PL_sv_undef && SvREFCNT(RETVAL)) sv_2mortal(RETVAL)
-
 typedef struct {
   SV* self_sv;
   XML_Parser p;
@@ -84,7 +65,6 @@ typedef struct {
   unsigned parseparam:1;
 
   /* Callback handlers */
-  SV* dflt_sv;
   SV* start_sv;
   SV* end_sv;
   SV* char_sv;
@@ -239,9 +219,9 @@ add_ns_mapping(AV *ns_stack, char *prefix, char *uri)
 
     /* warn("add_ns_mapping(%s => %s)\n", prefix, uri); */
 
-    sv_prefix = (prefix == NULL) ? newUTF8SVpv("", 0) 
+    sv_prefix = (prefix == NULL) ? SvREFCNT_inc(empty_sv) 
                                  : newUTF8SVpv(prefix, strlen(prefix));
-    sv_uri = (uri == NULL) ? newUTF8SVpv("", 0) 
+    sv_uri = (uri == NULL) ? SvREFCNT_inc(empty_sv)
                            : newUTF8SVpv(uri, strlen(uri));
 
     ret = newHV();
@@ -320,7 +300,7 @@ append_error(XML_Parser parser, char * err)
   if (! err)
        err = (char *) XML_ErrorString(XML_GetErrorCode(parser));
 
-  msg = (char *)malloc(strlen(err) + 50);
+  msg = (char *)mymalloc(strlen(err) + 50);
   sprintf(msg, "%s at line %d, column %d, byte %d",
           err,
           XML_GetCurrentLineNumber(parser),
@@ -331,9 +311,9 @@ append_error(XML_Parser parser, char * err)
   system = hv_fetch(cbv->locator_hv, "SystemId", 8, 0);
 
   hv_store(exc, "PublicId", 8, 
-           public ? *public : newUTF8SVpv("",0), PublicIdHash);
+           public ? *public : SvREFCNT_inc(empty_sv), PublicIdHash);
   hv_store(exc, "SystemId", 8, 
-	   system ? *system : newUTF8SVpv("",0), SystemIdHash);
+	   system ? *system : SvREFCNT_inc(empty_sv), SystemIdHash);
   hv_store(exc, "Message", 7, newUTF8SVpv((char*)msg, 0), 0);
   hv_store(exc, "Exception", 9, newUTF8SVpv((char*)err, 0), 0);
   hv_store(exc, "LineNumber", 10, 
@@ -354,6 +334,8 @@ append_error(XML_Parser parser, char * err)
   perl_call_method("fatal_error", G_DISCARD);
   FREETMPS;
   LEAVE;
+
+  myfree(msg);
 
 }  /* End append_error */
 
@@ -533,7 +515,7 @@ parse_stream(XML_Parser parser, SV * ioref)
 static HV *
 gen_ns_node(const char * name, AV * ns_stack)
 {
-  char    *pos = strchr(name, NSDELIM);
+  char *pos = strchr(name, NSDELIM);
   HV *ret = newHV();
 
   if (pos && pos > name)
@@ -581,11 +563,12 @@ gen_ns_node(const char * name, AV * ns_stack)
 }  /* End gen_ns_node */
 
 static void
-sendCharacterData(void *userData, SV *data)
+sendCharacterData(void *userData, SV *buffer)
 {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
   HV *thing;
+  SV *data;
 
   /* document locator updated, locator buffers reseted */
   hv_store(cbv->locator_hv, "LineNumber", 10, 
@@ -596,6 +579,8 @@ sendCharacterData(void *userData, SV *data)
   cbv->lcclbff = -1;
 
   thing = newHV();
+  /* can't be the same struct as buffer */
+  data = newSVsv(buffer);
 
   ENTER;
   SAVETMPS;
@@ -605,15 +590,15 @@ sendCharacterData(void *userData, SV *data)
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc((SV*)thing));
+  PUSHs(newRV_noinc(sv_2mortal((SV*)thing)));
   PUTBACK;
   perl_call_sv(cbv->char_sv, G_DISCARD);
 
   FREETMPS;
   LEAVE;
 
-  /* SvREFCNT_dec((SV*)thing); */
-}  /* End sendCharacterData */
+  /* warn("leaving ch: %d\n", SvREFCNT((SV*)thing)); */
+} /* End sendCharacterData */
 
 static void
 characterData(void *userData, const char *s, int len)
@@ -629,10 +614,10 @@ characterData(void *userData, const char *s, int len)
 
   /* joining character data or not */
   if (cbv->feat_join) {
-    sv_catsv(cbv->chrbuffer, newUTF8SVpv((char *)s, len));
+    sv_catsv(cbv->chrbuffer, sv_2mortal(newUTF8SVpv((char *)s, len)));
 
   } else {
-    sendCharacterData(userData, newUTF8SVpv((char *)s, len));
+    sendCharacterData(userData, sv_2mortal(newUTF8SVpv((char *)s, len)));
   }
 
 }  /* End characterData */
@@ -686,6 +671,7 @@ startElement(void *userData, const char *name, const char **atts)
         SvREFCNT_dec(keyname);
     }
     hv_store(node, "Attributes", 10, newRV_noinc((SV*)cbv->atts), AttributesHash);
+
     ENTER;
     SAVETMPS;
 
@@ -696,17 +682,15 @@ startElement(void *userData, const char *name, const char **atts)
     PUSHs(cbv->self_sv);
     PUSHs(element);
     PUTBACK;
-
     perl_call_sv(cbv->start_sv, G_DISCARD);
-    /* perl_call_method("start_element", G_DISCARD); */
 
     FREETMPS;
     LEAVE;
 
-    av_push(cbv->context, newRV_inc((SV*)node));
+    av_push(cbv->context, element);
     cbv->atts_ready = 0;
-//    warn("leaving: %d\n", SvREFCNT((SV*)node));
 
+  /* warn("leaving: %d\n", SvREFCNT((SV*)element)); */
 } /* End startElement */
 
 static void
@@ -738,7 +722,7 @@ endElement(void *userData, const char *name)
       char *key = hv_iterkey(next, &keylen);
       SV *value = hv_iterval(node, next);
       if (strncmp(key, "Attributes", 10) != 0) {
-          /* copy everything except attributes */
+          // copy everything except attributes 
           hv_store(end_node, key, keylen, newSVsv(value), 0);
       }
   }
@@ -749,7 +733,6 @@ endElement(void *userData, const char *name)
   PUSHs( newRV_noinc(sv_2mortal((SV*)end_node)) );
   PUTBACK;
   perl_call_sv(cbv->end_sv, G_DISCARD);
-  /* perl_call_method("end_element", G_DISCARD); */
 
   FREETMPS;
   LEAVE;
@@ -865,7 +848,7 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   if (cbv->feat_nsatts) {
     char *keyname;
 
-    keyname = (char *) malloc(prefix ? (strlen(prefix) + 37) : 37);
+    keyname = (char *) mymalloc(prefix ? (strlen(prefix) + 37) : 37);
     strcpy(keyname, "{http://www.w3.org/2000/xmlns/}");
     strcat(keyname, prefix ? prefix : "xmlns");
 
@@ -877,7 +860,7 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
     if (prefix) {
       char *a_name;
 
-      a_name = (char *) malloc(strlen(prefix) + 7);
+      a_name = (char *) mymalloc(strlen(prefix) + 7);
       strcpy(a_name, "xmlns:");
       strcat(a_name, prefix);
 
@@ -885,6 +868,8 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
       hv_store(nsatt, "Prefix", 6, newUTF8SVpv("xmlns", 5), PrefixHash);
       hv_store(nsatt, "LocalName", 9, 
                newUTF8SVpv((char*)prefix, strlen(prefix)), LocalNameHash);
+
+      myfree(a_name);
 
     } else {
       hv_store(nsatt, "Name", 4, newUTF8SVpv("xmlns", 5), NameHash);
@@ -898,8 +883,10 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
              uri ? newUTF8SVpv((char*)uri, strlen(uri)) : SvREFCNT_inc(empty_sv), 
              ValueHash);
 
-    hv_store_ent(cbv->atts, newUTF8SVpv(keyname, strlen(keyname)), 
+    hv_store_ent(cbv->atts, newUTF8SVpv(keyname, strlen(keyname)),
                  newRV_noinc((SV*)nsatt), 0);
+
+    myfree(keyname);
   }
 
 
@@ -927,7 +914,8 @@ nsEnd(void *userdata, const XML_Char *prefix) {
   xse_characters(userdata, cbv->chrbuffer);
   xse_locator_upd(cbv->p) /* document locator updated */
 
-  hv_store(node, "Prefix", 6, (prefix == NULL) ? newUTF8SVpv("", 0) : newUTF8SVpv((char *)prefix, 0), PrefixHash);
+  hv_store(node, "Prefix", 6, (prefix == NULL) ? SvREFCNT_inc(empty_sv) 
+                              : newUTF8SVpv((char *)prefix, 0), PrefixHash);
 
   ENTER;
   SAVETMPS;
@@ -944,27 +932,6 @@ nsEnd(void *userdata, const XML_Char *prefix) {
 
   del_ns_mapping(cbv->ns_stack, (char*)prefix);
 }  /* End nsEnd */
-
-
-static void
-defaulthandle(void *userData, const char *string, int len)
-{
-  dSP;
-  CallbackVector* cbv = (CallbackVector*) userData;
-
-  ENTER;
-  SAVETMPS;
-
-  PUSHMARK(sp);
-  EXTEND(sp, 2);
-  PUSHs(cbv->self_sv);
-  PUSHs(sv_2mortal(newUTF8SVpvn((char*)string, len)));
-  PUTBACK;
-  perl_call_sv(cbv->dflt_sv, G_DISCARD);
-
-  FREETMPS;
-  LEAVE;
-}  /* End defaulthandle */
 
 static void
 elementDecl(void *data,
@@ -1055,12 +1022,14 @@ entityDecl(void *data,
   HV * node = newHV();
   char* pname; 
 
-  pname = (char*) malloc(strlen(name) + 2);
+  pname = (char*) mymalloc(strlen(name) + 2);
   strcpy(pname, "%");
 
   hv_store(node, "Name", 4, 
            newUTF8SVpv((char *)(isparam ? strcat(pname, name) : name), 0), 
 	   NameHash);
+
+  myfree(pname);
 
   ENTER;
   SAVETMPS;
@@ -1081,10 +1050,10 @@ entityDecl(void *data,
     char* key;
 
     hv_store(node, "SystemId", 8, 
-	     sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), 
+	     sysid ? newUTF8SVpv((char*)sysid, 0) : SvREFCNT_inc(empty_sv), 
 	     SystemIdHash);
     hv_store(node, "PublicId", 8, 
-             pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), 
+             pubid ? newUTF8SVpv((char*)pubid, 0) : SvREFCNT_inc(empty_sv), 
 	     PublicIdHash);
 
     PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
@@ -1092,10 +1061,11 @@ entityDecl(void *data,
     perl_call_method("external_entity_decl", G_DISCARD);
 
     /* storing entity name */
-    key = (char*) malloc(300);
+    key = (char*) mymalloc(300);
     xse_extern_ent_key(key, base, sysid, pubid);
     hv_store(cbv->extern_hv, key, strlen(key),
              newUTF8SVpv((char*)name, 0), 0);
+    myfree(key);
   }
  
   FREETMPS;
@@ -1115,18 +1085,18 @@ doctypeStart(void *userData,
 
   hv_store(node, "Name", 4, newUTF8SVpv((char*)name, 0), NameHash);
   hv_store(node, "SystemId", 8, 
-           sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), 
+           sysid ? newUTF8SVpv((char*)sysid, 0) : SvREFCNT_inc(empty_sv), 
 	   SystemIdHash);
   hv_store(node, "PublicId", 8, 
-           pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), 
+           pubid ? newUTF8SVpv((char*)pubid, 0) : SvREFCNT_inc(empty_sv), 
 	   PublicIdHash);
 
   /* writing to locator */
   hv_store(cbv->locator_hv, "SystemId", 8, 
-           sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), 
+           sysid ? newUTF8SVpv((char*)sysid, 0) : SvREFCNT_inc(empty_sv), 
 	   SystemIdHash);
   hv_store(cbv->locator_hv, "PublicId", 8, 
-           pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), 
+           pubid ? newUTF8SVpv((char*)pubid, 0) : SvREFCNT_inc(empty_sv), 
 	   PublicIdHash);
 
   ENTER;
@@ -1170,9 +1140,9 @@ xmlDecl(void *userData,
   HV *node = newHV();
 
   hv_store(node, "Version", 7, version ? newUTF8SVpv((char*)version, 0) 
-		 : newUTF8SVpv("",0), VersionHash);
+		 : SvREFCNT_inc(empty_sv), VersionHash);
   hv_store(node, "Encoding", 8, encoding ? newUTF8SVpv((char*)encoding, 0)
-		 : newUTF8SVpv("",0), 0);
+		 : SvREFCNT_inc(empty_sv), 0);
   hv_store(node, "Standalone", 10, standalone == -1 ? &PL_sv_undef
 		 : (standalone ? newUTF8SVpv("yes",0) : newUTF8SVpv("no",0)), 0);
 
@@ -1183,9 +1153,9 @@ xmlDecl(void *userData,
 
   /* writing to locator */
   hv_store(cbv->locator_hv, "XMLVersion", 10, 
-           version ? newUTF8SVpv((char*)version, 0) : newUTF8SVpv("",0), 0);
+           version ? newUTF8SVpv((char*)version, 0) : SvREFCNT_inc(empty_sv), 0);
   hv_store(cbv->locator_hv, "Encoding", 8, 
-           encoding ? newUTF8SVpv((char*)encoding, 0) : newUTF8SVpv("",0), 0);
+           encoding ? newUTF8SVpv((char*)encoding, 0) : SvREFCNT_inc(empty_sv), 0);
 
   ENTER;
   SAVETMPS;
@@ -1244,9 +1214,9 @@ notationDecl(void *userData,
 
   hv_store(node, "Name", 4, newUTF8SVpv((char*)name, 0), NameHash);
   hv_store(node, "SystemId", 8, sysid ? newUTF8SVpv((char*)sysid, 0) 
-		 : newUTF8SVpv("",0), SystemIdHash);
+		 : SvREFCNT_inc(empty_sv), SystemIdHash);
   hv_store(node, "PublicId", 8, pubid ? newUTF8SVpv((char*)pubid, 0) 
-		 : newUTF8SVpv("",0), PublicIdHash);
+		 : SvREFCNT_inc(empty_sv), PublicIdHash);
 
   PUSHMARK(sp);
   XPUSHs(cbv->self_sv);
@@ -1283,9 +1253,10 @@ externalEntityRef(XML_Parser parser,
   */
 
   /* fetching entity name */
-  key = (char*) malloc(300);
+  key = (char*) mymalloc(300);
   xse_extern_ent_key(key, base, sysid, pubid);
   name = hv_fetch(cbv->extern_hv, key, strlen(key), 0);
+  myfree(key);
 
   ENTER ;
   SAVETMPS ;
@@ -1599,7 +1570,6 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
       XML_SetNotationDeclHandler(RETVAL, notationDecl);
       XML_SetExternalEntityRefHandler(RETVAL, externalEntityRef);
       XML_SetXmlDeclHandler(RETVAL, xmlDecl);
-      /* XML_SetDoctypeDeclHandler(RETVAL, doctypeDecl); */
       XML_SetStartDoctypeDeclHandler(RETVAL, doctypeStart);
       XML_SetEndDoctypeDeclHandler(RETVAL, doctypeEnd);
 
@@ -1641,6 +1611,22 @@ XML_ParserFree(parser)
     CODE:
     {
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+
+      /* SV */ 
+      if (cbv->recstring)
+	  SvREFCNT_dec(cbv->recstring);
+
+      if (cbv->start_sv)
+	  SvREFCNT_dec(cbv->start_sv);
+
+      if (cbv->end_sv)
+	  SvREFCNT_dec(cbv->end_sv);
+
+      if (cbv->char_sv)
+	  SvREFCNT_dec(cbv->char_sv);
+
+      if (cbv->chrbuffer)
+	  SvREFCNT_dec(cbv->chrbuffer);
 
       Safefree(cbv);
       XML_ParserFree(parser);
@@ -1808,13 +1794,13 @@ XML_SetCallbacks(parser, start, end, chars)
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
       if (cbv->start_sv) sv_setsv(cbv->start_sv, start);    
-      else cbv->start_sv = newSVsv(start);
+      else cbv->start_sv = SvREFCNT_inc(start);
 
       if (cbv->end_sv) sv_setsv(cbv->end_sv, end);    
-      else cbv->end_sv = newSVsv(end);
+      else cbv->end_sv = SvREFCNT_inc(end);
 
       if (cbv->char_sv) sv_setsv(cbv->char_sv, chars);    
-      else cbv->char_sv = newSVsv(chars);
+      else cbv->char_sv = SvREFCNT_inc(chars);
     }
 
 void
@@ -1889,28 +1875,13 @@ XML_RecognizedString(parser)
     XML_Parser            parser
     CODE:
     {
-      XML_DefaultHandler dflthndl = (XML_DefaultHandler) 0;
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
-
-      if (cbv->dflt_sv) {
-        dflthndl = defaulthandle;
-      }
 
       if (cbv->recstring) {
         sv_setpvn(cbv->recstring, "", 0);
       }
 
-      if (cbv->no_expand)
-        XML_SetDefaultHandler(parser, recString);
-      else
-        XML_SetDefaultHandlerExpand(parser, recString);
-
       XML_DefaultCurrent(parser);
-
-      if (cbv->no_expand)
-        XML_SetDefaultHandler(parser, dflthndl);
-      else
-        XML_SetDefaultHandlerExpand(parser, dflthndl);
 
       RETVAL = newSVsv(cbv->recstring);
     }
