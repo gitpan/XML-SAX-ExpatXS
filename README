@@ -1,0 +1,43 @@
+README file for Perl extension XML::SAX::ExpatXS
+================================================
+
+This module is an XS only implementation of PerlSAX2 parser
+using Expat. XML::SAX::Expat is currently implemented as a layer 
+over XML::Parser.
+
+This module has been created by Matt Sergeant reusing some
+files from XML::Parser. The current maintainer is Petr Cimprich
+<petr AT gingerall DOT cz>.
+
+It's still not entirely complete. Thought it should work for most
+people's uses, please consider the current version beta for 
+evaluation purposes. Feedback of any kind would be appreciated.
+
+These PerlSAX callbacks are supported and tested so far:
+
+ start_document()
+ end_document()
+ start_element()
+ end_element()
+ characters()
+ processing_instruction()
+ comment()
+ start_dtd()
+ end_dtd()
+ start_prefix_mapping()
+ end_prefix_mapping()
+ start_cdata()
+ end_cdata()
+ notation_decl()
+
+(Some other may work as well but hasn't been tested positively yet.)
+
+This one is deprecated but works:
+
+ xml_decl()
+
+Major items to be done ASAP:
+
+ locator interface
+ error handling
+

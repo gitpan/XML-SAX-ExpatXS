@@ -1,0 +1,15 @@
+Revision history for Perl extension XML::SAX::ExpatXS
+=====================================================
+
+0.95
+    - renamed to XML::SAX::ExpatXS
+    - completed parsing of xml declarations
+    - completed start_dtd, end_dtd
+    - fixed a bug of Attributes hash keys
+    - fixed an "Attempt to free unreferenced scalar during 
+      global destruction" bug when parsing repeatedly
+    - test suite extended      
+
+0.90_01
+    - Initial release by Matt Sergeant 
+      (a working parser).
