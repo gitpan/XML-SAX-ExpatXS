@@ -19,7 +19,7 @@ $parser->parse_string($xml);
 ok($handler->{data} eq 'foo({}id/{http://www.w3.org/2000/xmlns/}xmlns)p:boo({}id/{http://www.w3.org/2000/xmlns/}p)foo({}id)p:boo({}id)');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
 sub new { bless {data => ''}, shift }
 

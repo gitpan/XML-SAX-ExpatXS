@@ -15,7 +15,7 @@ $parser->parse_string($xml);
 ok($handler->{data} eq '0');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
 sub new { bless {data => ''}, shift }
 

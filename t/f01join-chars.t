@@ -24,7 +24,7 @@ $parser->parse_string($xml);
 ok($handler->{data} eq 'ch(data1N  )ch(data2N       data3N    )ch(data4)ch(N  )ch(N  data5N)ch(data1)ch(N)ch(  )ch(data2)ch(N)ch(       data3)ch(N)ch(    )ch(data4)ch(N)ch(  )ch(N)ch(  data5)ch(N)');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
 sub new { bless {data => ''}, shift }
 

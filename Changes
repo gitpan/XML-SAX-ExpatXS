@@ -1,6 +1,9 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.03 November 23, 2004
+    - minor fixes for make test
+
 1.02 November 22, 2004
     - document locator redesigned to fit
       Perl SAX 2.1 specs
