@@ -13,7 +13,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.20 2004/03/29 10:03:47 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.24 2004/04/09 14:40:28 cvspetr Exp $
 */
 
 
@@ -90,7 +90,9 @@ typedef struct {
 
   HV* locator_hv;
   HV* extern_hv;  
-  SV* chrbuffer;  
+  SV* chrbuffer;
+  int lclnbff;
+  int lcclbff;
 
 } CallbackVector;
 
@@ -120,7 +122,7 @@ static SV *empty_sv;
 /* Macro to update document locator */
 
 #define xse_locator_upd(p) \
-hv_store(cbv->locator_hv,"LineNumber", 10,\
+hv_store(cbv->locator_hv, "LineNumber", 10,\
 		  newSViv((IV)XML_GetCurrentLineNumber(p)), 0);\
 hv_store(cbv->locator_hv, "ColumnNumber", 12,\
 		  newSViv((IV)XML_GetCurrentColumnNumber(p)+1), 0);
@@ -304,13 +306,15 @@ append_error(XML_Parser parser, char * err)
   dSP;
   CallbackVector * cbv;
   HV * exc = newHV();
+  SV **public;
+  SV **system;	  
+  char *msg;
 
   cbv = (CallbackVector*) XML_GetUserData(parser);
 
   if (! err)
        err = (char *) XML_ErrorString(XML_GetErrorCode(parser));
 
-  char *msg;
   msg = (char *)malloc(strlen(err) + 50);
   sprintf(msg, "%s at line %d, column %d, byte %d",
           err,
@@ -318,8 +322,6 @@ append_error(XML_Parser parser, char * err)
           XML_GetCurrentColumnNumber(parser)+1,
           XML_GetCurrentByteIndex(parser));
 
-  SV **public;	  
-  SV **system;	  
   public = hv_fetch(cbv->locator_hv, "PublicId", 8, 0);
   system = hv_fetch(cbv->locator_hv, "SystemId", 8, 0);
 
@@ -579,7 +581,15 @@ sendCharacterData(void *userData, SV *data)
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
   HV *thing;
-  xse_locator_upd(cbv->p) /* document locator updated */
+
+  /* document locator updated, locator buffers reseted */
+  hv_store(cbv->locator_hv, "LineNumber", 10, 
+           newSViv((IV)cbv->lclnbff), 0);
+  hv_store(cbv->locator_hv, "ColumnNumber", 12,
+           newSViv((IV)cbv->lcclbff), 0);
+  cbv->lclnbff = -1;
+  cbv->lcclbff = -1;
+
   thing = newHV();
 
   ENTER;
@@ -606,12 +616,19 @@ characterData(void *userData, const char *s, int len)
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
 
-  if (cbv->feat_join)  
+  /* buffering locator data */
+  if (cbv->lclnbff == -1) 
+     cbv->lclnbff = XML_GetCurrentLineNumber(cbv->p);
+  if (cbv->lcclbff == -1) 
+     cbv->lcclbff = XML_GetCurrentColumnNumber(cbv->p) + 1;
+
+  /* joining character data or not */
+  if (cbv->feat_join) {
     sv_catsv(cbv->chrbuffer, newUTF8SVpv((char *)s, len));
 
-  else
+  } else {
     sendCharacterData(userData, newUTF8SVpv((char *)s, len));
-
+  }
 
 }  /* End characterData */
 
@@ -620,16 +637,14 @@ startElement(void *userData, const char *name, const char **atts)
 {
     dSP;
     CallbackVector* cbv = (CallbackVector*) userData;
-
-    xse_characters(userData, cbv->chrbuffer);
-
     SV ** pcontext;
     unsigned   do_ns = cbv->ns;
     HV *node;
     SV *element;
     HV *attributes = newHV();
 
-    xse_locator_upd(cbv->p) /* document locator updated */
+    xse_characters(userData, cbv->chrbuffer);
+    xse_locator_upd(cbv->p) /* document locator updated */	
 
     node = gen_ns_node(name, cbv->ns_stack);
     /*
@@ -648,7 +663,6 @@ startElement(void *userData, const char *name, const char **atts)
         char *key;
         STRLEN klen;
         char  *pos = strchr(*atts, NSDELIM);
-
         key = (char *)*atts;
 
         attname = gen_ns_node(key, cbv->ns_stack);
@@ -702,14 +716,12 @@ endElement(void *userData, const char *name)
 {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
-
-  xse_characters(userData, cbv->chrbuffer);
-
   SV *top;
   HV *node;
   HV *end_node;
   HE *next;
 
+  xse_characters(userData, cbv->chrbuffer);
   xse_locator_upd(cbv->p) /* document locator updated */
 
   top = av_pop(cbv->context);
@@ -752,12 +764,10 @@ processingInstruction(void *userData, const char *target, const char *data)
 {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
+  HV *thing = newHV();
 
   xse_characters(userData, cbv->chrbuffer);
-
   xse_locator_upd(cbv->p) /* document locator updated */
-
-  HV *thing = newHV();
 
   hv_store(thing, "Target", 6, newUTF8SVpv((char*)target, 0), TargetHash);
   if (data)
@@ -783,10 +793,9 @@ commenthandle(void *userData, const char *string)
 {
   dSP;
   CallbackVector * cbv = (CallbackVector*) userData;
+  HV *thing = newHV();
 
   xse_characters(userData, cbv->chrbuffer);
-
-  HV *thing = newHV();
 
   hv_store(thing, "Data", 4, newUTF8SVpv((char*)string, 0), DataHash);
 
@@ -851,7 +860,6 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   CallbackVector* cbv = (CallbackVector*) userdata;
 
   xse_characters(userdata, cbv->chrbuffer);
-
   xse_locator_upd(cbv->p) /* document locator updated */
 
   ENTER;
@@ -872,12 +880,10 @@ static void
 nsEnd(void *userdata, const XML_Char *prefix) {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userdata;
+  HV *node = newHV();
 
   xse_characters(userdata, cbv->chrbuffer);
-
   xse_locator_upd(cbv->p) /* document locator updated */
-
-  HV *node = newHV();
 
   hv_store(node, "Prefix", 6, (prefix == NULL) ? newUTF8SVpv("", 0) : newUTF8SVpv((char *)prefix, 0), PrefixHash);
 
@@ -896,6 +902,7 @@ nsEnd(void *userdata, const XML_Char *prefix) {
 
   del_ns_mapping(cbv->ns_stack, (char*)prefix);
 }  /* End nsEnd */
+
 
 static void
 defaulthandle(void *userData, const char *string, int len)
@@ -1005,8 +1012,8 @@ entityDecl(void *data,
   dSP;
   CallbackVector *cbv = (CallbackVector*) data;
   HV * node = newHV();
-
   char* pname; 
+
   pname = (char*) malloc(strlen(name) + 2);
   strcpy(pname, "%");
 
@@ -1030,6 +1037,8 @@ entityDecl(void *data,
 
   /* --- external parsed entity --- */
   } else {
+    char* key;
+
     hv_store(node, "SystemId", 8, 
 	     sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), 
 	     SystemIdHash);
@@ -1042,7 +1051,6 @@ entityDecl(void *data,
     perl_call_method("external_entity_decl", G_DISCARD);
 
     /* storing entity name */
-    char* key;
     key = (char*) malloc(300);
     xse_extern_ent_key(key, base, sysid, pubid);
     hv_store(cbv->extern_hv, key, strlen(key),
@@ -1217,12 +1225,14 @@ externalEntityRef(XML_Parser parser,
 #if defined(USE_THREADS) && PATCHLEVEL==6
   dTHX;
 #endif
-
   int count;
   int ret = 0;
   int parse_done = 0;
-
   CallbackVector* cbv = (CallbackVector*) XML_GetUserData(parser);
+  char* key;
+  SV **name;
+  HV *start = newHV();
+  HV *end = newHV();
 
   xse_characters((void*)cbv, cbv->chrbuffer);
 
@@ -1232,17 +1242,14 @@ externalEntityRef(XML_Parser parser,
   */
 
   /* fetching entity name */
-  char* key;
   key = (char*) malloc(300);
   xse_extern_ent_key(key, base, sysid, pubid);
-  SV **name;
   name = hv_fetch(cbv->extern_hv, key, strlen(key), 0);
 
   ENTER ;
   SAVETMPS ;
 
   /* start_entity */
-  HV *start = newHV();
   hv_store(start, "Name", 4, *name, NameHash);
 
   PUSHMARK(sp);
@@ -1330,7 +1337,6 @@ externalEntityRef(XML_Parser parser,
     append_error(parser, "Handler couldn't resolve external entity");
 
   /* end entity */
-  HV *end = newHV();
   hv_store(end, "Name", 4, *name, NameHash);
 
   PUSHMARK(sp);
@@ -1401,9 +1407,6 @@ unknownEncoding(void *unused, const char *name, XML_Encoding *info)
   int i;
   char buff[42];
 
-  warn("Encoding %s not supported in this version!\n.", name);
-  croak("Encoding %s not supported in this version!\n.", name);
-
   namelen = strlen(name);
   if (namelen > 40)
     return 0;
@@ -1417,9 +1420,9 @@ unknownEncoding(void *unused, const char *name, XML_Encoding *info)
   }
 
   if (! EncodingTable) {
-    EncodingTable = perl_get_hv("XML::Parser::Expat::Encoding_Table", FALSE);
+    EncodingTable = perl_get_hv("XML::SAX::ExpatXS::Encoding::Encoding_Table", FALSE);
     if (! EncodingTable)
-      croak("Can't find XML::Parser::Expat::Encoding_Table");
+      croak("Can't find XML::SAX::ExpatXS::Encoding::Encoding_Table");
   }
 
   encinfptr = hv_fetch(EncodingTable, buff, namelen, 0);
@@ -1434,7 +1437,7 @@ unknownEncoding(void *unused, const char *name, XML_Encoding *info)
     PUSHMARK(sp);
     XPUSHs(sv_2mortal(newSVpvn(buff,namelen)));
     PUTBACK;
-    perl_call_pv("XML::Parser::Expat::load_encoding", G_DISCARD);
+    perl_call_pv("XML::SAX::ExpatXS::Encoding::load_encoding", G_DISCARD);
 
     encinfptr = hv_fetch(EncodingTable, buff, namelen, 0);
     FREETMPS;
@@ -1444,8 +1447,8 @@ unknownEncoding(void *unused, const char *name, XML_Encoding *info)
       return 0;
   }
 
-  if (! sv_derived_from(*encinfptr, "XML::Parser::Encinfo"))
-    croak("Entry in XML::Parser::Expat::Encoding_Table not an Encinfo object");
+  if (! sv_derived_from(*encinfptr, "XML::SAX::ExpatXS::Encinfo"))
+    croak("Entry in XML::SAX::ExpatXS::Encoding::Encoding_Table not an Encinfo object");
 
   enc = (Encinfo *) SvIV((SV*)SvRV(*encinfptr));
   Copy(enc->firstmap, info->map, 256, int);
@@ -1517,7 +1520,7 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 
       spp = hv_fetch((HV*)SvRV(cbv->self_sv), "Context", 7, 0);
       if (! spp || ! *spp || !SvROK(*spp))
-        croak("XML::Parser instance missing Context");
+        croak("XML::SAX::ExpatXS instance missing Context");
 
       cbv->context = (AV*) SvRV(*spp);
 
@@ -1525,7 +1528,7 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
             15, FALSE);
 
       if (!spp || !*spp || !SvROK(*spp))
-        croak("XML::Parser instance missing Namespace_Stack");
+        croak("XML::SAX::ExpatXS instance missing Namespace_Stack");
 
       cbv->ns_stack = (AV *)SvRV(*spp);
 
@@ -1572,6 +1575,8 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
       XML_SetParamEntityParsing(RETVAL, pep);
 
       cbv->chrbuffer = newUTF8SVpv("", 0);
+      cbv->lclnbff = -1;
+      cbv->lcclbff = -1;
       cbv->feat_join = xse_get_feature("http://xmlns.perl.org/sax/join-character-data");
     }
     OUTPUT:
@@ -1971,14 +1976,14 @@ XML_LoadEncoding(data, size)
         entry->bytemap[i] = ntohs(bm[i]);
 
           sv = newSViv(0);
-          sv_setref_pv(sv, "XML::Parser::Encinfo", (void *) entry);
+          sv_setref_pv(sv, "XML::SAX::ExpatXS::Encinfo", (void *) entry);
 
           if (! EncodingTable) {
         EncodingTable
-          = perl_get_hv("XML::Parser::Expat::Encoding_Table",
+          = perl_get_hv("XML::SAX::ExpatXS::Encoding::Encoding_Table",
                 FALSE);
         if (! EncodingTable)
-          croak("Can't find XML::Parser::Expat::Encoding_Table");
+          croak("Can't find XML::SAX::ExpatXS::Encoding::Encoding_Table");
           }
 
           hv_store(EncodingTable, emh->name, namelen, sv, 0);

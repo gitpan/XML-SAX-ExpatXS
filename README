@@ -1,6 +1,15 @@
 README file for Perl extension XML::SAX::ExpatXS
 ================================================
 
+1. Introduction
+2. Callbacks
+3. Encoding
+4. Known Issues
+
+
+1.Introduction
+------------------------------
+
 This module is an XS only implementation of PerlSAX2 parser
 using Expat. XML::SAX::Expat is currently implemented as a layer 
 over XML::Parser.
@@ -14,8 +23,8 @@ people's uses, please consider the current version beta for
 evaluation purposes. Feedback of any kind would be appreciated.
 
 
-Callbacks
----------
+2. Callbacks
+------------------------------
 
 These PerlSAX callbacks are supported and tested so far:
 
@@ -55,11 +64,42 @@ This one is deprecated but works:
  xml_decl()
 
 
-Known Issues
-------------
+3. Encoding
+------------------------------
+
+These charsets and encodings are supported:
+
+UTF-8        (1)
+UTF-16	     (1)
+US-ASCII     (1)
+ISO-8859-1   (1)
+ISO-8859-2   (2)
+ISO-8859-3   (2)
+ISO-8859-4   (2)
+ISO-8859-5   (2)
+ISO-8859-7   (2)
+ISO-8859-8   (2)
+ISO-8859-9   (2)
+WINDOWS-1250 (2)
+WINDOWS-1252 (2)
+BIG5	     (2)
+EUC-KR	     (2)
+EUC-JP	     (2,3)
+Shift JIS.   (2,3)
+
+(1) Expat built-in
+(2) external hadler
+(3) see lib/XML/SAX/ExpatXS/Encodings/Japanese_Encodings.msg
+
+Other encodings can be added with XML::Encoding, see 
+lib/XML/SAX/ExpatXS/Encodings/README for more info.
+
+
+4. Known Issues
+------------------------------
 
  - Document locator provides the start position of content events.
    SAX requires the end position.
 
- - Only Expat built-in encodings (UTF-8, UTF-16, ISO-8859-1, US-ASCII)
-   supported so far.
+ - These callbacks aren't called yet: 
+   skipped_entity(), element_decl (), attribute_decl ()
