@@ -16,25 +16,25 @@ _xml_
 
 $parser->parse_string($xml);
 
-#warn $handler->{data};
+#warn "$handler->{data}";
 ok($handler->{data} eq '_sD_sDtd_iDec(%par,par_entity_value)_iDec(int,int_entity_value)_eDtd_sE(root)_eE_eD');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
-sub new { bless {events => ''}, shift }
+sub new { bless {data => ''}, shift }
 
 sub start_document {
     my ($self, $doc) = @_;
     #warn("StartDoc:\n");
-    #Dump($el);
+    #Dump($doc);
     $self->{data} .= '_sD';
 }
 
 sub end_document {
     my ($self, $doc) = @_;
     #warn("EndDoc:\n");
-    #Dump($el);
+    #Dump($doc);
     $self->{data} .= '_eD';
 }
 

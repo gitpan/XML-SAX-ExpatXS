@@ -18,7 +18,7 @@ $parser->parse_string($xml);
 ok($handler->{data} eq 'PItarget|PIdata and more data');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
 sub new { bless {data => ''}, shift }
 

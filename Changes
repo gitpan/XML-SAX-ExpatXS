@@ -1,6 +1,18 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+0.99 June 7, 2004
+    - element_decl (Name, Model) completed
+    - attribute_decl (eName, aName, Type, Mode, Value) completed
+    - ns declaration attributes are treated as common attributes
+      when the 'http://xmlns.perl.org/sax/ns-attributes' feature
+      is set to 1 (default)
+    - fixed the bug of "0" translated into ""
+      [patch by Sam Tregar]
+    - fixed a reference counting bug in startElement
+      [reported by Sam Tregar]
+    - test suite extended
+
 0.98 April 9, 2004
     - added support for more encodings. In addition to
       built-in Expat encodings (UTF-8, UTF-16, ISO-8859-1, 

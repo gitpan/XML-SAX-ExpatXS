@@ -43,6 +43,8 @@ These PerlSAX callbacks are supported and tested so far:
  end_dtd()
  start_cdata()
  end_cdata()
+ element_decl
+ attribute_decl
  notation_decl()
  unparsed_entity_decl()
  external_entity_decl()

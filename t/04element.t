@@ -18,7 +18,7 @@ $parser->parse_string($xml);
 ok($handler->{data} eq 'p1:foo|foo|ns1|p1|a1|a1|||v1|p2:a2|a2|ns2|p2|v2|p1:foo|foo|ns1|p1|');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
 sub new { bless {data => ''}, shift }
 

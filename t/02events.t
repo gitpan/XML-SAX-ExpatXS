@@ -14,7 +14,7 @@ $parser->parse_string("<?xml version='1.0'?><!-- comment --><foo/>");
 ok(join(":", @{$handler->{events}}) eq '1:1:1:0:1');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
 sub new { bless {events => [0,0,0,0,0]}, shift }
 

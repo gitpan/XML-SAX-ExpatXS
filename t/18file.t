@@ -11,7 +11,7 @@ $parser->parse_uri('t/file.xml');
 ok($handler->{start} == 72 and $handler->{end} == 72);
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
 sub new { bless {start => 0, end => 0}, shift }
 

@@ -1,4 +1,4 @@
-# $Id: Encoding.pm,v 1.1 2004/04/07 13:08:11 cvspetr Exp $
+# $Id: Encoding.pm,v 1.2 2004/05/15 15:56:26 cvspetr Exp $
 
 package XML::SAX::ExpatXS::Encoding;
 require 5.004;
@@ -68,6 +68,95 @@ sub DESTROY {
   my $self = shift;
   XML::SAX::ExpatXS::FreeEncoding($self);
 }
+
+
+################################################################
+
+package XML::SAX::ExpatXS::ContentModel;
+use overload '""' => \&asString, 'eq' => \&thiseq;
+
+sub EMPTY  () {1}
+sub ANY    () {2}
+sub MIXED  () {3}
+sub NAME   () {4}
+sub CHOICE () {5}
+sub SEQ    () {6}
+
+sub isempty {
+  return $_[0]->{Type} == EMPTY;
+}
+
+sub isany {
+  return $_[0]->{Type} == ANY;
+}
+
+sub ismixed {
+  return $_[0]->{Type} == MIXED;
+}
+
+sub isname {
+  return $_[0]->{Type} == NAME;
+}
+
+sub name {
+  return $_[0]->{Tag};
+}
+
+sub ischoice {
+  return $_[0]->{Type} == CHOICE;
+}
+
+sub isseq {
+  return $_[0]->{Type} == SEQ;
+}
+
+sub quant {
+  return $_[0]->{Quant};
+}
+
+sub children {
+  my $children = $_[0]->{Children};
+  if (defined $children) {
+    return @$children;
+  }
+  return undef;
+}
+
+sub asString {
+  my ($self) = @_;
+  my $ret;
+
+  if ($self->{Type} == NAME) {
+    $ret = $self->{Tag};
+  }
+  elsif ($self->{Type} == EMPTY) {
+    return "EMPTY";
+  }
+  elsif ($self->{Type} == ANY) {
+    return "ANY";
+  }
+  elsif ($self->{Type} == MIXED) {
+    $ret = '(#PCDATA';
+    foreach (@{$self->{Children}}) {
+      $ret .= '|' . $_;
+    }
+    $ret .= ')';
+  }
+  else {
+    my $sep = $self->{Type} == CHOICE ? '|' : ',';
+    $ret = '(' . join($sep, map { $_->asString } @{$self->{Children}}) . ')';
+  }
+
+  $ret .= $self->{Quant} if $self->{Quant};
+  return $ret;
+}
+
+sub thiseq {
+  my $self = shift;
+
+  return $self->asString eq $_[0];
+}
+
 
 1;
 

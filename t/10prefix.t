@@ -17,9 +17,9 @@ $parser->parse_string($xml);
 ok($handler->{data} eq '_sd_spm||ns1_se_spm|p|ns2_se_ee_epm|p_ee_epm|_ed');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
-sub new { bless {events => ''}, shift }
+sub new { bless {data => ''}, shift }
 
 sub start_document {
     my ($self, $doc) = @_;

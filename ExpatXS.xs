@@ -13,7 +13,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.24 2004/04/09 14:40:28 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.30 2004/06/07 09:37:08 cvspetr Exp $
 */
 
 
@@ -73,6 +73,7 @@ typedef struct {
 
   int skip_until;
   int feat_join;
+  int feat_nsatts;
 
   SV *recstring;
   char * delim;
@@ -87,6 +88,9 @@ typedef struct {
   SV* start_sv;
   SV* end_sv;
   SV* char_sv;
+
+  HV* atts;
+  int atts_ready;
 
   HV* locator_hv;
   HV* extern_hv;  
@@ -136,12 +140,13 @@ sysid ? sysid : "", 299), pubid ? pubid : "", 299);
 /* Macro to emit characters */
 
 #define xse_characters(userData, buffer) \
-if (SvTRUE(buffer)) {\
+if (SvCUR(buffer) > 0) {\
     sendCharacterData(userData, buffer);\
     sv_setpv(buffer, "");\
 }
 
 /* Macro to get a feature value */
+
 #define xse_get_feature(fname) \
 SvIV(*(hv_fetch((HV*)SvRV(*(hv_fetch((HV*)SvRV(cbv->self_sv), "Features", 8, 0))), fname, strlen(fname), 0)));
 
@@ -358,7 +363,7 @@ generate_model(XML_Content *model) {
   HV * hash = newHV();
   SV * obj = newRV_noinc((SV *) hash);
 
-  sv_bless(obj, gv_stashpv("XML::Parser::ContentModel", 1));
+  sv_bless(obj, gv_stashpv("XML::SAX::ExpatXS::ContentModel", 1));
 
   hv_store(hash, "Type", 4, newSViv(model->type), 0);
   if (model->quant != XML_CQUANT_NONE) {
@@ -641,21 +646,14 @@ startElement(void *userData, const char *name, const char **atts)
     unsigned   do_ns = cbv->ns;
     HV *node;
     SV *element;
-    HV *attributes = newHV();
 
     xse_characters(userData, cbv->chrbuffer);
     xse_locator_upd(cbv->p) /* document locator updated */	
 
+    if (!cbv->atts_ready) cbv->atts = newHV();
+
     node = gen_ns_node(name, cbv->ns_stack);
-    /*
-    if (do_ns) {
-        node = gen_ns_node(name, cbv->ns_stack);
-    }
-    else {
-        node = newHV();
-        hv_store(node, "Name", 4, newUTF8SVpv((char *)name, 0), NameHash);
-    }
-    */
+
     while (*atts)
     {
         HV * attname;
@@ -684,10 +682,10 @@ startElement(void *userData, const char *name, const char **atts)
             sv_catpvn(keyname, "}", 1);
             sv_catpv(keyname, key);
         }
-        hv_store_ent(attributes, keyname, newRV_noinc((SV*)attname), 0);
+        hv_store_ent(cbv->atts, keyname, newRV_noinc((SV*)attname), 0);
         SvREFCNT_dec(keyname);
     }
-    hv_store(node, "Attributes", 10, newRV_noinc((SV*)attributes), AttributesHash);
+    hv_store(node, "Attributes", 10, newRV_noinc((SV*)cbv->atts), AttributesHash);
     ENTER;
     SAVETMPS;
 
@@ -705,8 +703,8 @@ startElement(void *userData, const char *name, const char **atts)
     FREETMPS;
     LEAVE;
 
-    av_push(cbv->context, newRV_noinc((SV*)node));
-
+    av_push(cbv->context, newRV_inc((SV*)node));
+    cbv->atts_ready = 0;
 //    warn("leaving: %d\n", SvREFCNT((SV*)node));
 
 } /* End startElement */
@@ -858,9 +856,52 @@ static void
 nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   dSP;
   CallbackVector* cbv = (CallbackVector*) userdata;
+  HV *nsatt = newHV();
 
   xse_characters(userdata, cbv->chrbuffer);
   xse_locator_upd(cbv->p) /* document locator updated */
+
+  /* NS declarations are reported as common attributes or not */
+  if (cbv->feat_nsatts) {
+    char *keyname;
+
+    keyname = (char *) malloc(prefix ? (strlen(prefix) + 37) : 37);
+    strcpy(keyname, "{http://www.w3.org/2000/xmlns/}");
+    strcat(keyname, prefix ? prefix : "xmlns");
+
+    if (!cbv->atts_ready) {
+      cbv->atts = newHV();
+      cbv->atts_ready = 1;
+    }     
+
+    if (prefix) {
+      char *a_name;
+
+      a_name = (char *) malloc(strlen(prefix) + 7);
+      strcpy(a_name, "xmlns:");
+      strcat(a_name, prefix);
+
+      hv_store(nsatt, "Name", 4, newUTF8SVpv(a_name, strlen(a_name)), NameHash);
+      hv_store(nsatt, "Prefix", 6, newUTF8SVpv("xmlns", 5), PrefixHash);
+      hv_store(nsatt, "LocalName", 9, 
+               newUTF8SVpv((char*)prefix, strlen(prefix)), LocalNameHash);
+
+    } else {
+      hv_store(nsatt, "Name", 4, newUTF8SVpv("xmlns", 5), NameHash);
+      hv_store(nsatt, "Prefix", 6, SvREFCNT_inc(empty_sv), PrefixHash);
+      hv_store(nsatt, "LocalName", 9, newUTF8SVpv("xmlns", 5), LocalNameHash);
+    }
+
+    hv_store(nsatt, "NamespaceURI", 12, 
+             newUTF8SVpv("http://www.w3.org/2000/xmlns/", 29), NamespaceURIHash);
+    hv_store(nsatt, "Value", 5, 
+             uri ? newUTF8SVpv((char*)uri, strlen(uri)) : SvREFCNT_inc(empty_sv), 
+             ValueHash);
+
+    hv_store_ent(cbv->atts, newUTF8SVpv(keyname, strlen(keyname)), 
+                 newRV_noinc((SV*)nsatt), 0);
+  }
+
 
   ENTER;
   SAVETMPS;
@@ -874,6 +915,7 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
 
   FREETMPS;
   LEAVE;
+
 }  /* End nsStart */
 
 static void
@@ -945,7 +987,6 @@ elementDecl(void *data,
   PUSHMARK(sp);
   EXTEND(sp, 3);
   PUSHs(cbv->self_sv);
-  /* FIXME - need to pass normalized string, not content model! */
   PUSHs( newRV_noinc(sv_2mortal((SV*)thing) ) );
   PUTBACK;
   perl_call_method("element_decl", G_DISCARD);
@@ -983,7 +1024,7 @@ attributeDecl(void *data,
   hv_store(node, "eName", 5, newUTF8SVpv((char *)elname, 0), 0);
   hv_store(node, "aName", 5, newUTF8SVpv((char *)attname, 0), 0);
   hv_store(node, "Type", 4, newUTF8SVpv((char *)att_type, 0), 0);
-  hv_store(node, "ValueDefault", 12, dfltsv, 0);
+  hv_store(node, "Mode", 4, dfltsv, 0);
   hv_store(node, "Value", 5, valsv, ValueHash);
 
   ENTER;
@@ -1029,7 +1070,7 @@ entityDecl(void *data,
 
   /* --- internal entity --- */
   if (value) {
-    hv_store(node, "Value", 5, newUTF8SVpv((char *)value, 0), 0);
+    hv_store(node, "Value", 5, newUTF8SVpv((char *)value, vlen), 0);
 
     PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
     PUTBACK;
@@ -1574,10 +1615,12 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 
       XML_SetParamEntityParsing(RETVAL, pep);
 
+      cbv->atts_ready = 0;
       cbv->chrbuffer = newUTF8SVpv("", 0);
       cbv->lclnbff = -1;
       cbv->lcclbff = -1;
       cbv->feat_join = xse_get_feature("http://xmlns.perl.org/sax/join-character-data");
+      cbv->feat_nsatts = xse_get_feature("http://xmlns.perl.org/sax/ns-attributes");
     }
     OUTPUT:
     RETVAL
@@ -1589,7 +1632,7 @@ XML_ParserRelease(parser)
       {
         CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
-    SvREFCNT_dec(cbv->self_sv);
+	 SvREFCNT_dec(cbv->self_sv);
       }
 
 void

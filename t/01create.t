@@ -13,7 +13,7 @@ $parser->parse_string("<foo>fffffggg</foo>");
 $parser->parse_string("<x:foo xmlns:x='urn:foob' x:bar='glib'/>");
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
 sub new { bless {}, shift }
 

@@ -21,9 +21,9 @@ $parser->parse_string($xml);
 ok($handler->{data} eq '_sD_sDtd_iDec(internal,int_entity_value)_eDtd_sE(root)_ch(Nint_entity_valueN)_eE_eD');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
-sub new { bless {events => ''}, shift }
+sub new { bless {data => ''}, shift }
 
 sub start_document {
     my ($self, $doc) = @_;

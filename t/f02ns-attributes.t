@@ -6,50 +6,48 @@ my $handler = TestH->new();
 my $parser = XML::SAX::ExpatXS->new( Handler => $handler );
 
 my $xml =<<_xml_;
-<foo xmlns="nsDef">
-  <p:boo xmlns:p="nsP1">
-    <hoo xmlns="">
-      <p:woo xmlns:p="nsP2"/>
-    </hoo>
-  </p:boo>
+<foo xmlns="http://ns1" id="e1">
+  <p:boo xmlns:p="http://ns2" id="e2"/>
 </foo>
 _xml_
 
 $parser->parse_string($xml);
+$parser->set_feature('http://xmlns.perl.org/sax/ns-attributes', 0);
+$parser->parse_string($xml);
 
 #warn $handler->{data};
-ok($handler->{data} eq 'sP(:nsDef)sE(nsDef:foo)sP(p:nsP1)sE(nsP1:boo)sP(:)sE(:hoo)sP(p:nsP2)sE(nsP2:woo)eE(nsP2:woo)eP(p)eE(:hoo)eP()eE(nsP1:boo)eP(p)eE(nsDef:foo)eP()');
+ok($handler->{data} eq 'foo({}id/{http://www.w3.org/2000/xmlns/}xmlns)p:boo({}id/{http://www.w3.org/2000/xmlns/}p)foo({}id)p:boo({}id)');
 
 package TestH;
-#use Devel::Peek;
+use Devel::Peek;
 
 sub new { bless {data => ''}, shift }
 
 
 sub start_element {
     my ($self, $el) = @_;
-    #warn("Start:$el->{Name}\n");
+    #warn("Start:$el->{Name}:$el->{Attributes}\n");
     #Dump($el);
-    $self->{data} .= "sE($el->{NamespaceURI}:$el->{LocalName})";
+    $atts = join('/', keys %{$el->{Attributes}});
+    $self->{data} .= "$el->{Name}($atts)";
 }
 
 sub end_element {
     my ($self, $el) = @_;
     #warn("End:$el->{Name}\n");
     #Dump($el);
-    $self->{data} .= "eE($el->{NamespaceURI}:$el->{LocalName})";
 }
 
 sub start_prefix_mapping {
     my ($self, $map) = @_;
     #warn("sPref:$map->{Prefix}\n");
     #Dump($map);
-    $self->{data} .= "sP($map->{Prefix}:$map->{NamespaceURI})";
+    #$self->{data} .= "sP($map->{Prefix}:$map->{NamespaceURI})";
 }
 
 sub end_prefix_mapping {
     my ($self, $map) = @_;
     #warn("ePref:$map->{Prefix}\n");
     #Dump($map);
-    $self->{data} .= "eP($map->{Prefix})";
+    #$self->{data} .= "eP($map->{Prefix})";
 }

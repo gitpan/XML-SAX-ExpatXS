@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.16 2004/04/08 09:20:36 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.18 2004/05/15 15:08:44 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -10,7 +10,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '0.98';
+$VERSION = '0.99';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -19,6 +19,7 @@ my @supported_features = (
 	'http://xml.org/sax/features/namespaces',
 	'http://xml.org/sax/features/external-general-entities',
 	'http://xmlns.perl.org/sax/join-character-data',
+	'http://xmlns.perl.org/sax/ns-attributes',
 			 );
 
 #------------------------------------------------------------
@@ -32,6 +33,7 @@ sub new {
     $options->{Features}->{$supported_features[0]} = 1;
     $options->{Features}->{$supported_features[1]} = 1;
     $options->{Features}->{$supported_features[2]} = 1;
+    $options->{Features}->{$supported_features[3]} = 1;
 
     return $proto->SUPER::new($options);
 }

@@ -16,9 +16,9 @@ $parser->parse_string($xml);
 ok($handler->{data} eq '_sd_sdtd|html|-//W3C//DTD XHTML 1.0 Strict//EN|http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd_edtd_se');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
-sub new { bless {events => ''}, shift }
+sub new { bless {data => ''}, shift }
 
 sub start_document {
     my ($self, $doc) = @_;

@@ -20,7 +20,7 @@ $parser->parse_string($xml);
 ok($handler->{data} eq '_setDL|1|1|_sd|1|1|_se|3|1|_ch|3|6|_sm|4|3|_se|4|3|_ch|4|27|_ee|4|31|_em|4|31|_ch|4|37|_pi|5|3|_ch|5|22|_ee|6|1|_ed|6|1|utf-8|1.0|pub|sys');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
 sub new { bless {data => ''}, shift }
 

@@ -21,9 +21,9 @@ $parser->parse_string($xml);
 ok($handler->{data} eq '_sD_sDtd_eDec(external,,TEST:external)_eDtd_sE(root)_sEnt(external)_rE(t/external.xml)_sE(boo)_eE_eEnt(external)_eE_eD');
 
 package TestH;
-use Devel::Peek;
+#use Devel::Peek;
 
-sub new { bless {events => ''}, shift }
+sub new { bless {data => ''}, shift }
 
 sub resolve_entity {
     my ($self, $ent) = @_;
