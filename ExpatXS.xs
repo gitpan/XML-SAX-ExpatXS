@@ -13,7 +13,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.10 2004/02/18 13:52:05 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.20 2004/03/29 10:03:47 cvspetr Exp $
 */
 
 
@@ -72,6 +72,7 @@ typedef struct {
   AV *ns_stack;
 
   int skip_until;
+  int feat_join;
 
   SV *recstring;
   char * delim;
@@ -83,18 +84,13 @@ typedef struct {
 
   /* Callback handlers */
   SV* dflt_sv;
-  SV* entdcl_sv;
+  SV* start_sv;
+  SV* end_sv;
+  SV* char_sv;
 
-/* not in use anymore, 
-  SV* doctyp_sv;
-  SV* doctypfin_sv;
-  SV* xmldec_sv; 
-  SV* notation_sv;
-  SV* unprsd_sv;
-*/
-
-  SV* extent_sv;
-  SV* extfin_sv;
+  HV* locator_hv;
+  HV* extern_hv;  
+  SV* chrbuffer;  
 
 } CallbackVector;
 
@@ -121,14 +117,31 @@ static U32 SystemIdHash;
 
 static SV *empty_sv;
 
-static HV* locator;
-
 /* Macro to update document locator */
-#define DL_UPD(p) \
-hv_store(locator,"LineNumber", 10,\
+
+#define xse_locator_upd(p) \
+hv_store(cbv->locator_hv,"LineNumber", 10,\
 		  newSViv((IV)XML_GetCurrentLineNumber(p)), 0);\
-hv_store(locator, "ColumnNumber", 12,\
+hv_store(cbv->locator_hv, "ColumnNumber", 12,\
 		  newSViv((IV)XML_GetCurrentColumnNumber(p)+1), 0);
+
+/* Macro to generate external entity name key */
+
+#define xse_extern_ent_key(key, base, sysid, pubid) \
+key = strncat(strncat(strncpy(key, base ? base : "", 299), \
+sysid ? sysid : "", 299), pubid ? pubid : "", 299);
+
+/* Macro to emit characters */
+
+#define xse_characters(userData, buffer) \
+if (SvTRUE(buffer)) {\
+    sendCharacterData(userData, buffer);\
+    sv_setpv(buffer, "");\
+}
+
+/* Macro to get a feature value */
+#define xse_get_feature(fname) \
+SvIV(*(hv_fetch((HV*)SvRV(*(hv_fetch((HV*)SvRV(cbv->self_sv), "Features", 8, 0))), fname, strlen(fname), 0)));
 
 
 /* Forward declarations */
@@ -219,8 +232,10 @@ add_ns_mapping(AV *ns_stack, char *prefix, char *uri)
 
     /* warn("add_ns_mapping(%s => %s)\n", prefix, uri); */
 
-    sv_prefix = (prefix == NULL) ? newUTF8SVpv("", 0) : newUTF8SVpv(prefix, strlen(prefix));
-    sv_uri = newUTF8SVpv(uri, strlen(uri));
+    sv_prefix = (prefix == NULL) ? newUTF8SVpv("", 0) 
+                                 : newUTF8SVpv(prefix, strlen(prefix));
+    sv_uri = (uri == NULL) ? newUTF8SVpv("", 0) 
+                           : newUTF8SVpv(uri, strlen(uri));
 
     ret = newHV();
     hv_store(ret, "Prefix", 6, sv_prefix, PrefixHash);
@@ -296,7 +311,7 @@ append_error(XML_Parser parser, char * err)
        err = (char *) XML_ErrorString(XML_GetErrorCode(parser));
 
   char *msg;
-  msg = (char *)malloc(300);
+  msg = (char *)malloc(strlen(err) + 50);
   sprintf(msg, "%s at line %d, column %d, byte %d",
           err,
           XML_GetCurrentLineNumber(parser),
@@ -305,8 +320,8 @@ append_error(XML_Parser parser, char * err)
 
   SV **public;	  
   SV **system;	  
-  public = hv_fetch(locator, "PublicId", 8, 0);
-  system = hv_fetch(locator, "SystemId", 8, 0);
+  public = hv_fetch(cbv->locator_hv, "PublicId", 8, 0);
+  system = hv_fetch(cbv->locator_hv, "SystemId", 8, 0);
 
   hv_store(exc, "PublicId", 8, 
            public ? *public : newUTF8SVpv("",0), PublicIdHash);
@@ -559,32 +574,45 @@ gen_ns_node(const char * name, AV * ns_stack)
 }  /* End gen_ns_node */
 
 static void
-characterData(void *userData, const char *s, int len)
+sendCharacterData(void *userData, SV *data)
 {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
   HV *thing;
-
-  DL_UPD(cbv->p) /* document locator updated */
-
+  xse_locator_upd(cbv->p) /* document locator updated */
   thing = newHV();
 
   ENTER;
   SAVETMPS;
 
-  hv_store(thing, "Data", 4, newUTF8SVpvn((char*)s,len), DataHash);
+  hv_store(thing, "Data", 4, data, DataHash);
 
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
   PUSHs(newRV_noinc((SV*)thing));
   PUTBACK;
-  perl_call_method("characters", G_DISCARD);
+  perl_call_sv(cbv->char_sv, G_DISCARD);
 
   FREETMPS;
   LEAVE;
 
-  SvREFCNT_dec((SV*)thing);
+  /* SvREFCNT_dec((SV*)thing); */
+}  /* End sendCharacterData */
+
+static void
+characterData(void *userData, const char *s, int len)
+{
+  dSP;
+  CallbackVector* cbv = (CallbackVector*) userData;
+
+  if (cbv->feat_join)  
+    sv_catsv(cbv->chrbuffer, newUTF8SVpv((char *)s, len));
+
+  else
+    sendCharacterData(userData, newUTF8SVpv((char *)s, len));
+
+
 }  /* End characterData */
 
 static void
@@ -592,14 +620,19 @@ startElement(void *userData, const char *name, const char **atts)
 {
     dSP;
     CallbackVector* cbv = (CallbackVector*) userData;
+
+    xse_characters(userData, cbv->chrbuffer);
+
     SV ** pcontext;
     unsigned   do_ns = cbv->ns;
     HV *node;
     SV *element;
     HV *attributes = newHV();
 
-    DL_UPD(cbv->p) /* document locator updated */
+    xse_locator_upd(cbv->p) /* document locator updated */
 
+    node = gen_ns_node(name, cbv->ns_stack);
+    /*
     if (do_ns) {
         node = gen_ns_node(name, cbv->ns_stack);
     }
@@ -607,7 +640,7 @@ startElement(void *userData, const char *name, const char **atts)
         node = newHV();
         hv_store(node, "Name", 4, newUTF8SVpv((char *)name, 0), NameHash);
     }
-
+    */
     while (*atts)
     {
         HV * attname;
@@ -641,7 +674,6 @@ startElement(void *userData, const char *name, const char **atts)
         SvREFCNT_dec(keyname);
     }
     hv_store(node, "Attributes", 10, newRV_noinc((SV*)attributes), AttributesHash);
-
     ENTER;
     SAVETMPS;
 
@@ -652,7 +684,9 @@ startElement(void *userData, const char *name, const char **atts)
     PUSHs(cbv->self_sv);
     PUSHs(element);
     PUTBACK;
-    perl_call_method("start_element", G_DISCARD);
+
+    perl_call_sv(cbv->start_sv, G_DISCARD);
+    /* perl_call_method("start_element", G_DISCARD); */
 
     FREETMPS;
     LEAVE;
@@ -668,12 +702,15 @@ endElement(void *userData, const char *name)
 {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
+
+  xse_characters(userData, cbv->chrbuffer);
+
   SV *top;
   HV *node;
   HV *end_node;
   HE *next;
 
-  DL_UPD(cbv->p) /* document locator updated */
+  xse_locator_upd(cbv->p) /* document locator updated */
 
   top = av_pop(cbv->context);
 
@@ -701,7 +738,8 @@ endElement(void *userData, const char *name)
   PUSHs(cbv->self_sv);
   PUSHs( newRV_noinc(sv_2mortal((SV*)end_node)) );
   PUTBACK;
-  perl_call_method("end_element", G_DISCARD);
+  perl_call_sv(cbv->end_sv, G_DISCARD);
+  /* perl_call_method("end_element", G_DISCARD); */
 
   FREETMPS;
   LEAVE;
@@ -715,7 +753,9 @@ processingInstruction(void *userData, const char *target, const char *data)
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
 
-  DL_UPD(cbv->p) /* document locator updated */
+  xse_characters(userData, cbv->chrbuffer);
+
+  xse_locator_upd(cbv->p) /* document locator updated */
 
   HV *thing = newHV();
 
@@ -743,6 +783,9 @@ commenthandle(void *userData, const char *string)
 {
   dSP;
   CallbackVector * cbv = (CallbackVector*) userData;
+
+  xse_characters(userData, cbv->chrbuffer);
+
   HV *thing = newHV();
 
   hv_store(thing, "Data", 4, newUTF8SVpv((char*)string, 0), DataHash);
@@ -768,6 +811,8 @@ startCdata(void *userData)
     dSP;
     CallbackVector* cbv = (CallbackVector*) userData;
 
+    xse_characters(userData, cbv->chrbuffer);
+
     ENTER;
     SAVETMPS;
 
@@ -786,6 +831,8 @@ endCdata(void *userData)
     dSP;
     CallbackVector* cbv = (CallbackVector*) userData;
 
+    xse_characters(userData, cbv->chrbuffer);
+
     ENTER;
     SAVETMPS;
 
@@ -803,7 +850,9 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
   dSP;
   CallbackVector* cbv = (CallbackVector*) userdata;
 
-  DL_UPD(cbv->p) /* document locator updated */
+  xse_characters(userdata, cbv->chrbuffer);
+
+  xse_locator_upd(cbv->p) /* document locator updated */
 
   ENTER;
   SAVETMPS;
@@ -824,7 +873,9 @@ nsEnd(void *userdata, const XML_Char *prefix) {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userdata;
 
-  DL_UPD(cbv->p) /* document locator updated */
+  xse_characters(userdata, cbv->chrbuffer);
+
+  xse_locator_upd(cbv->p) /* document locator updated */
 
   HV *node = newHV();
 
@@ -955,33 +1006,52 @@ entityDecl(void *data,
   CallbackVector *cbv = (CallbackVector*) data;
   HV * node = newHV();
 
-  hv_store(node, "Name", 4, newUTF8SVpv((char *)name, 0), 0);
-  if (pubid) {
-      hv_store(node, "PublicId", 8, newUTF8SVpv((char *)pubid, 0), PublicIdHash);
-  }
-  else {
-      hv_store(node, "PublicId", 8, &PL_sv_undef, PublicIdHash);
-  }
-  hv_store(node, "SystemId", 8, newUTF8SVpv((char *)sysid, 0), SystemIdHash);
-  
+  char* pname; 
+  pname = (char*) malloc(strlen(name) + 2);
+  strcpy(pname, "%");
+
+  hv_store(node, "Name", 4, 
+           newUTF8SVpv((char *)(isparam ? strcat(pname, name) : name), 0), 
+	   NameHash);
+
   ENTER;
   SAVETMPS;
-
   PUSHMARK(sp);
-  EXTEND(sp, 6);
+  EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs(sv_2mortal(newUTF8SVpv((char*)name, 0)));
-  PUSHs(value ? sv_2mortal(newUTF8SVpvn((char*)value, vlen)) : &PL_sv_undef);
-  PUSHs(sysid ? sv_2mortal(newUTF8SVpv((char *)sysid, 0)) : &PL_sv_undef);
-  PUSHs(pubid ? sv_2mortal(newUTF8SVpv((char *)pubid, 0)) : &PL_sv_undef);
-  PUSHs(notation ? sv_2mortal(newUTF8SVpv((char *)notation, 0)) : &PL_sv_undef);
-  if (isparam)
-    XPUSHs(&PL_sv_yes);
-  PUTBACK;
-  perl_call_sv(cbv->entdcl_sv, G_DISCARD);
 
+  /* --- internal entity --- */
+  if (value) {
+    hv_store(node, "Value", 5, newUTF8SVpv((char *)value, 0), 0);
+
+    PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
+    PUTBACK;
+    perl_call_method("internal_entity_decl", G_DISCARD);
+
+  /* --- external parsed entity --- */
+  } else {
+    hv_store(node, "SystemId", 8, 
+	     sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), 
+	     SystemIdHash);
+    hv_store(node, "PublicId", 8, 
+             pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), 
+	     PublicIdHash);
+
+    PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
+    PUTBACK;
+    perl_call_method("external_entity_decl", G_DISCARD);
+
+    /* storing entity name */
+    char* key;
+    key = (char*) malloc(300);
+    xse_extern_ent_key(key, base, sysid, pubid);
+    hv_store(cbv->extern_hv, key, strlen(key),
+             newUTF8SVpv((char*)name, 0), 0);
+  }
+ 
   FREETMPS;
   LEAVE;
+
 }  /* End entityDecl */
 
 static void
@@ -996,16 +1066,19 @@ doctypeStart(void *userData,
 
   hv_store(node, "Name", 4, newUTF8SVpv((char*)name, 0), NameHash);
   hv_store(node, "SystemId", 8, 
-           sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), SystemIdHash);
+           sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), 
+	   SystemIdHash);
   hv_store(node, "PublicId", 8, 
-           pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), PublicIdHash);
+           pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), 
+	   PublicIdHash);
 
   /* writing to locator */
-  hv_store(locator, "SystemId", 8, 
-           sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), SystemIdHash);
-  hv_store(locator, "PublicId", 8, 
-           pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), PublicIdHash);
-
+  hv_store(cbv->locator_hv, "SystemId", 8, 
+           sysid ? newUTF8SVpv((char*)sysid, 0) : newUTF8SVpv("",0), 
+	   SystemIdHash);
+  hv_store(cbv->locator_hv, "PublicId", 8, 
+           pubid ? newUTF8SVpv((char*)pubid, 0) : newUTF8SVpv("",0), 
+	   PublicIdHash);
 
   ENTER;
   SAVETMPS;
@@ -1054,16 +1127,16 @@ xmlDecl(void *userData,
   hv_store(node, "Standalone", 10, standalone == -1 ? &PL_sv_undef
 		 : (standalone ? newUTF8SVpv("yes",0) : newUTF8SVpv("no",0)), 0);
 
-/* 1/0 instead of 'yes'/'no'
+  /* 1/0 instead of 'yes'/'no'
   hv_store(node, "Standalone", 10, standalone == -1 ? &PL_sv_undef
 		 : (standalone ? &PL_sv_yes : &PL_sv_no), 0); 
-*/
+  */
 
   /* writing to locator */
-  hv_store(locator, "XMLVersion", 10, version ? newUTF8SVpv((char*)version, 0) 
-		    : newUTF8SVpv("",0), 0);
-  hv_store(locator, "Encoding", 8, encoding ? newUTF8SVpv((char*)encoding, 0)
-		    : newUTF8SVpv("",0), 0);
+  hv_store(cbv->locator_hv, "XMLVersion", 10, 
+           version ? newUTF8SVpv((char*)version, 0) : newUTF8SVpv("",0), 0);
+  hv_store(cbv->locator_hv, "Encoding", 8, 
+           encoding ? newUTF8SVpv((char*)encoding, 0) : newUTF8SVpv("",0), 0);
 
   ENTER;
   SAVETMPS;
@@ -1073,7 +1146,6 @@ xmlDecl(void *userData,
   PUSHs(cbv->self_sv);
   PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
   PUTBACK;
-  /* perl_call_sv(cbv->xmldec_sv, G_DISCARD); -pc- */
   perl_call_method("xml_decl", G_DISCARD);
   FREETMPS;
   LEAVE;
@@ -1152,85 +1224,104 @@ externalEntityRef(XML_Parser parser,
 
   CallbackVector* cbv = (CallbackVector*) XML_GetUserData(parser);
 
-  if (! cbv->extent_sv)
+  xse_characters((void*)cbv, cbv->chrbuffer);
+
+  /* FEATURE ? skipped_entity : go on 
+  if (FEATURE)
     return 0;
+  */
+
+  /* fetching entity name */
+  char* key;
+  key = (char*) malloc(300);
+  xse_extern_ent_key(key, base, sysid, pubid);
+  SV **name;
+  name = hv_fetch(cbv->extern_hv, key, strlen(key), 0);
 
   ENTER ;
   SAVETMPS ;
+
+  /* start_entity */
+  HV *start = newHV();
+  hv_store(start, "Name", 4, *name, NameHash);
+
   PUSHMARK(sp);
-  EXTEND(sp, pubid ? 4 : 3);
+  EXTEND(sp, 2);
+  PUSHs(cbv->self_sv);
+  PUSHs(newRV_noinc(sv_2mortal((SV*)start)));
+  PUTBACK;
+  perl_call_method("start_entity", G_DISCARD);
+  SPAGAIN;
+
+  /* open the entity */
+  PUSHMARK(sp);
+  EXTEND(sp, 4);
   PUSHs(cbv->self_sv);
   PUSHs(base ? sv_2mortal(newUTF8SVpv((char*) base, 0)) : &PL_sv_undef);
-  PUSHs(sv_2mortal(newSVpv((char*) sysid, 0)));
-  if (pubid)
-    PUSHs(sv_2mortal(newUTF8SVpv((char*) pubid, 0)));
-  PUTBACK ;
-  count = perl_call_sv(cbv->extent_sv, G_SCALAR);
+  PUSHs(sysid ? sv_2mortal(newUTF8SVpv((char*) sysid, 0)) : &PL_sv_undef);
+  PUSHs(pubid ? sv_2mortal(newUTF8SVpv((char*) pubid, 0)) : &PL_sv_undef);
+  PUTBACK;
+  count = perl_call_method("_get_external_entity", G_SCALAR);
 
-  SPAGAIN ;
+  SPAGAIN;
 
   if (count >= 1) {
     SV * result = POPs;
+
     int type;
 
     if (result && (type = SvTYPE(result)) > 0) {
-      SV **pval = hv_fetch((HV*) SvRV(cbv->self_sv), "Parser", 6, 0);
+      SV **pval = hv_fetch((HV*)SvRV(cbv->self_sv), "Parser", 6, 0);
 
-      if (! pval || ! SvIOK(*pval))
-    append_error(parser, "Can't find parser entry in XML::Parser object");
-      else {
-    XML_Parser entpar;
-    char *errmsg = (char *) 0;
+      if (! pval || ! SvIOK(*pval)) {
+        append_error(parser, 
+	"Can't find parser entry in XML::SAX::ExpatXS object");
 
-    entpar = XML_ExternalEntityParserCreate(parser, open, 0);
+      } else {
+        XML_Parser entpar;
+	char *errmsg = (char *) 0;
 
-    XML_SetBase(entpar, XML_GetBase(parser));
+	entpar = XML_ExternalEntityParserCreate(parser, open, 0);
 
-    sv_setiv(*pval, (IV) entpar);
+	XML_SetBase(entpar, XML_GetBase(parser));
 
-    cbv->p = entpar;
+	sv_setiv(*pval, (IV) entpar);
 
-    PUSHMARK(sp);
-    EXTEND(sp, 2);
-    PUSHs(*pval);
-    PUSHs(result);
-    PUTBACK;
-    count = perl_call_pv("XML::Parser::Expat::Do_External_Parse",
-                 G_SCALAR | G_EVAL);
-    SPAGAIN;
+	cbv->p = entpar;
 
-    if (SvTRUE(ERRSV)) {
-      char *hold;
-      int   len;
+	PUSHMARK(sp);
+	EXTEND(sp, 2);
+	PUSHs(*pval);
+	PUSHs(result);
+	PUTBACK;
+	count = perl_call_pv("XML::SAX::ExpatXS::Do_External_Parse",
+		               G_SCALAR | G_EVAL);
+        SPAGAIN;
 
-      POPs;
-      hold = SvPV(ERRSV, len);
-      New(326, errmsg, len + 1, char);
-      if (len)
-        Copy(hold, errmsg, len, char);
-      goto Extparse_Cleanup;
-    }
+	if (SvTRUE(ERRSV)) {
+	  char  *hold;
+	  int   len;
 
-    if (count > 0)
-      ret = POPi;
+	  POPs;
+          hold = SvPV(ERRSV, len);
+          New(326, errmsg, len + 1, char);
+          if (len)
+            Copy(hold, errmsg, len, char);
+          goto Extparse_Cleanup;
+	}
 
-    parse_done = 1;
+        if (count > 0)
+          ret = POPi;
+	/* warn("external parsing return value: %d", ret); */
+        parse_done = 1;
 
-      Extparse_Cleanup:
-    cbv->p = parser;
-    sv_setiv(*pval, (IV) parser);
-    XML_ParserFree(entpar);
+        Extparse_Cleanup:
+        cbv->p = parser;
+        sv_setiv(*pval, (IV) parser);
+        XML_ParserFree(entpar);
 
-    if (cbv->extfin_sv) {
-      PUSHMARK(sp);
-      PUSHs(cbv->self_sv);
-      PUTBACK;
-      perl_call_sv(cbv->extfin_sv, G_DISCARD);
-      SPAGAIN;
-    }
-
-    if (SvTRUE(ERRSV))
-      append_error(parser, SvPV(ERRSV, PL_na));
+        if (SvTRUE(ERRSV))
+          append_error(parser, SvPV(ERRSV, PL_na));
       }
     }
   }
@@ -1238,11 +1329,23 @@ externalEntityRef(XML_Parser parser,
   if (! ret && ! parse_done)
     append_error(parser, "Handler couldn't resolve external entity");
 
-  PUTBACK ;
+  /* end entity */
+  HV *end = newHV();
+  hv_store(end, "Name", 4, *name, NameHash);
+
+  PUSHMARK(sp);
+  EXTEND(sp, 2);
+  PUSHs(cbv->self_sv);
+  PUSHs(newRV_noinc((SV*)end));
+  /* PUSHs(newRV_noinc(sv_2mortal((SV*)end))); */
+  PUTBACK;
+  perl_call_method("end_entity", G_DISCARD);
+
   FREETMPS ;
   LEAVE ;
 
   return ret;
+
 }  /* End externalEntityRef */
 
 /*================================================================
@@ -1297,6 +1400,9 @@ unknownEncoding(void *unused, const char *name, XML_Encoding *info)
   int namelen;
   int i;
   char buff[42];
+
+  warn("Encoding %s not supported in this version!\n.", name);
+  croak("Encoding %s not supported in this version!\n.", name);
 
   namelen = strlen(name);
   if (namelen > 40)
@@ -1464,6 +1570,9 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
       }
 
       XML_SetParamEntityParsing(RETVAL, pep);
+
+      cbv->chrbuffer = newUTF8SVpv("", 0);
+      cbv->feat_join = xse_get_feature("http://xmlns.perl.org/sax/join-character-data");
     }
     OUTPUT:
     RETVAL
@@ -1608,19 +1717,57 @@ XML_GetBase(parser)
 
 
 HV *
-XML_GetLocator()
+XML_GetLocator(parser)
+    XML_Parser            parser
     CODE:
     {
-      locator = newHV();
-      hv_store(locator, "LineNumber", 10, newSViv(1), 0);
-      hv_store(locator, "ColumnNumber", 12, newSViv(1), 0);
+      CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
-      RETVAL = locator;
+      cbv->locator_hv = newHV();
+      hv_store(cbv->locator_hv, "LineNumber", 10, newSViv(1), 0);
+      hv_store(cbv->locator_hv, "ColumnNumber", 12, newSViv(1), 0);
+
+      RETVAL = cbv->locator_hv;
     }
 
     OUTPUT:
     RETVAL
 
+
+HV *
+XML_GetExternEnt(parser)
+    XML_Parser            parser
+    CODE:
+    {
+      CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+
+      cbv->extern_hv = newHV();
+
+      RETVAL = cbv->extern_hv;
+    }
+
+    OUTPUT:
+    RETVAL
+
+void
+XML_SetCallbacks(parser, start, end, chars)
+    XML_Parser            parser
+    SV *		  start
+    SV *		  end
+    SV *		  chars
+    CODE:
+    {
+      CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+
+      if (cbv->start_sv) sv_setsv(cbv->start_sv, start);    
+      else cbv->start_sv = newSVsv(start);
+
+      if (cbv->end_sv) sv_setsv(cbv->end_sv, end);    
+      else cbv->end_sv = newSVsv(end);
+
+      if (cbv->char_sv) sv_setsv(cbv->char_sv, chars);    
+      else cbv->char_sv = newSVsv(chars);
+    }
 
 void
 XML_PositionContext(parser, lines)
@@ -1869,13 +2016,13 @@ XML_OriginalString(parser)
 
 int
 XML_Do_External_Parse(parser, result)
-    XML_Parser            parser
+    XML_Parser          parser
     SV *                result
     CODE:
     {
       int type;
 
-          CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
+      CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
 
       if (SvROK(result) && SvOBJECT(SvRV(result))) {
         RETVAL = parse_stream(parser, result);
@@ -1893,6 +2040,4 @@ XML_Do_External_Parse(parser, result)
       }
     }
     OUTPUT:
-        RETVAL
-
-
+    RETVAL

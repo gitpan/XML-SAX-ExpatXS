@@ -1,6 +1,23 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+0.97 March 29, 2004
+    - external parsed entities parsed
+    - external_entity_decl (Name, PublicId, SystemId) called 
+      for external entity declarations
+    - internal_entity_decl (Name, Value) called for external 
+      entity declarations
+    - start_entity (Name), end_entity (Name) called for 
+      external entity references
+    - resolve_entity callback implemented
+    - get_feature(), set_feature(), get_features() API functions 
+      implemented 
+    - feature 'http://xmlns.perl.org/sax/join-character-data' controls 
+      character data fragmentation, 0/1 (1 being default)
+    - performance optimizations
+    - fixed the xmlns="" segmentation fault
+    - test suite extended
+
 0.96 February 19, 2004
     - exceptions (Message, Exception, LineNumber, 
       ColumnNumber, PublicId, SystemId) sent to ErrorHandler

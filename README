@@ -13,6 +13,10 @@ It's still not entirely complete. Thought it should work for most
 people's uses, please consider the current version beta for 
 evaluation purposes. Feedback of any kind would be appreciated.
 
+
+Callbacks
+---------
+
 These PerlSAX callbacks are supported and tested so far:
 
  start_document()
@@ -32,8 +36,12 @@ These PerlSAX callbacks are supported and tested so far:
  end_cdata()
  notation_decl()
  unparsed_entity_decl()
+ external_entity_decl()
+ internal_entity_decl()
+ start_entity()
+ end_entity ()
+ resolve_entity()
 
-(Some other may work as well but hasn't been tested positively yet.)
 
 These methods are never called by XML::SAX::ExpatXS:
 
@@ -41,11 +49,17 @@ These methods are never called by XML::SAX::ExpatXS:
  error()
  ignorable_whitespace()
 
+
 This one is deprecated but works:
 
  xml_decl()
 
-Known Issues:
+
+Known Issues
+------------
 
  - Document locator provides the start position of content events.
    SAX requires the end position.
+
+ - Only Expat built-in encodings (UTF-8, UTF-16, ISO-8859-1, US-ASCII)
+   supported so far.
