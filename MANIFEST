@@ -57,6 +57,7 @@ t/f01join-chars.t
 t/f02ns-attributes.t
 t/f03locator.t
 t/f04xmlns-uris.t
+t/f05xmlns-uris2.t
 t/external.xml
 t/file.xml
 t/file2.xml

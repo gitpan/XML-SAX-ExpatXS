@@ -14,7 +14,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.47 2005/03/16 14:50:26 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.48 2005/04/22 08:47:19 cvspetr Exp $
 */
 
 
@@ -58,6 +58,7 @@ typedef struct {
   int feat_nsatts;
   int feat_locator;
   int feat_xmlns;
+  int feat_perlxmlns;
 
   SV *recstring;
   char * delim;
@@ -835,8 +836,6 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
     char *keyname;
 
     keyname = (char *) mymalloc(prefix ? (strlen(prefix) + 37) : 37);
-    strcpy(keyname, cbv->feat_xmlns ? "{http://www.w3.org/2000/xmlns/}" : "{}");
-    strcat(keyname, prefix ? prefix : "xmlns");
 
     if (!cbv->atts_ready) {
       cbv->atts = newHV();
@@ -850,22 +849,33 @@ nsStart(void *userdata, const XML_Char *prefix, const XML_Char *uri){
       strcpy(a_name, "xmlns:");
       strcat(a_name, prefix);
 
+      strcpy(keyname, (cbv->feat_perlxmlns || cbv->feat_xmlns) 
+             ? "{http://www.w3.org/2000/xmlns/}" : "{}");
+
       hv_store(nsatt, "Name", 4, newUTF8SVpv(a_name, strlen(a_name)), NameHash);
       hv_store(nsatt, "Prefix", 6, newUTF8SVpv("xmlns", 5), PrefixHash);
       hv_store(nsatt, "LocalName", 9, 
                newUTF8SVpv((char*)prefix, strlen(prefix)), LocalNameHash);
+      hv_store(nsatt, "NamespaceURI", 12, (cbv->feat_perlxmlns || cbv->feat_xmlns) ?
+               newUTF8SVpv("http://www.w3.org/2000/xmlns/", 29) 
+               : SvREFCNT_inc(empty_sv), NamespaceURIHash);
 
       myfree(a_name);
 
     } else {
+
+      strcpy(keyname, cbv->feat_xmlns ? "{http://www.w3.org/2000/xmlns/}" : "{}");
+
       hv_store(nsatt, "Name", 4, newUTF8SVpv("xmlns", 5), NameHash);
       hv_store(nsatt, "Prefix", 6, SvREFCNT_inc(empty_sv), PrefixHash);
       hv_store(nsatt, "LocalName", 9, newUTF8SVpv("xmlns", 5), LocalNameHash);
+      hv_store(nsatt, "NamespaceURI", 12, cbv->feat_xmlns ?
+               newUTF8SVpv("http://www.w3.org/2000/xmlns/", 29) 
+               : SvREFCNT_inc(empty_sv), NamespaceURIHash);
     }
 
-    hv_store(nsatt, "NamespaceURI", 12, cbv->feat_xmlns ?
-             newUTF8SVpv("http://www.w3.org/2000/xmlns/", 29) : SvREFCNT_inc(empty_sv), 
-             NamespaceURIHash);
+    strcat(keyname, prefix ? prefix : "xmlns");
+
     hv_store(nsatt, "Value", 5, 
              uri ? newUTF8SVpv((char*)uri, strlen(uri)) : SvREFCNT_inc(empty_sv), 
              ValueHash);
@@ -1576,7 +1586,9 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 
       cbv->atts_ready = 0;
       cbv->chrbuffer = newUTF8SVpv("", 0);
-      cbv->feat_xmlns = get_feature(cbv, "http://xml.org/sax/features/xmlns-uris");
+      cbv->feat_perlxmlns = get_feature(cbv, "http://xmlns.perl.org/sax/xmlns-uris");
+      cbv->feat_xmlns = cbv->feat_perlxmlns 
+          ? 0 : get_feature(cbv, "http://xml.org/sax/features/xmlns-uris");
       cbv->feat_join = get_feature(cbv, "http://xmlns.perl.org/sax/join-character-data");
       cbv->feat_nsatts = get_feature(cbv, "http://xmlns.perl.org/sax/ns-attributes");
       cbv->feat_locator = get_feature(cbv, "http://xmlns.perl.org/sax/locator");

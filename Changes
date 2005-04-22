@@ -1,6 +1,17 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.08 April 22, 2005
+    - feature 'http://xmlns.perl.org/sax/xmlns-uris'
+      puts xmlns:* attributes into 
+      the 'http://www.w3.org/2000/xmlns/' namespace
+      and xmlns attributes into no namespace.
+      The 'http://xml.org/sax/features/xmlns-uris'
+      applies if the new one is off.
+      The default behavior is the same as for other 
+      Perl SAX parsers now.
+    - fixed repeated parsing with Perl 5.6
+
 1.07 March 16, 2005
     - feature  'http://xml.org/sax/features/xmlns-uris'
       puts xmlns and xmlns:* attributes into no or

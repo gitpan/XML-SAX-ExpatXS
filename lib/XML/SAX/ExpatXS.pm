@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.31 2005/03/16 14:50:26 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.32 2005/04/22 08:47:19 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -10,7 +10,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.07';
+$VERSION = '1.08';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -19,6 +19,7 @@ my @features = (
 	['http://xml.org/sax/features/namespaces', 1],
 	['http://xml.org/sax/features/external-general-entities', 1],
         ['http://xml.org/sax/features/xmlns-uris', 0],
+        ['http://xmlns.perl.org/sax/xmlns-uris', 1],
         ['http://xmlns.perl.org/sax/version-2.1', 1],
 	['http://xmlns.perl.org/sax/join-character-data', 1],
 	['http://xmlns.perl.org/sax/ns-attributes', 1],
@@ -110,6 +111,7 @@ sub _parse {
     my $self = shift;
 
     my $args = bless $self->{ParseOptions}, ref($self);
+    delete $args->{ParseOptions};
 
     # copy handlers over
     $args->{Handler} = $self->{Handler};
@@ -235,10 +237,18 @@ Consequent character data are joined (1, default) or not (0).
 
 Namespace attributes are reported as common attributes (1, default) or not (0).
 
+=item C<http://xmlns.perl.org/sax/xmlns-uris>
+
+When set on, xmlns and xmlns:* attributes are put into namespaces in a Perl SAX
+traditional way; xmlns attributes are in no namespace while xmlns:* attributes
+are in the C<http://www.w3.org/2000/xmlns/> namespace. This feature is set to 1
+by default.
+
 =item C<http://xml.org/sax/features/xmlns-uris>
 
-When reported, xmlns and xmlns:* attributes are put into no namespace (0, default)
-or into C<http://www.w3.org/2000/xmlns/> namespace (1).
+This feature applies if and only if the C<http://xmlns.perl.org/sax/xmlns-uris>
+feture is off. Then, xmlns and xmlns:* attributes are both put into no namespace 
+(0, default) or into C<http://www.w3.org/2000/xmlns/> namespace (1).
 
 =item C<http://xmlns.perl.org/sax/locator>
 
