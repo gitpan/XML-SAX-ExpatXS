@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.32 2005/04/22 08:47:19 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.35 2005/10/14 10:28:48 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -10,7 +10,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.08';
+$VERSION = '1.09';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -128,11 +128,14 @@ sub _parse {
     $args->{Context} = [];
     $args->{ErrorMessage} ||= '';
     $args->{Namespace_Stack} = [[ xml => 'http://www.w3.org/XML/1998/namespace' ]];
-    $args->{Parser} = ParserCreate($args, $args->{ProtocolEncoding}, 1);
+    $args->{Parser} = ParserCreate($args, 
+				   $args->{Source}{Encoding} 
+				   || $args->{ProtocolEncoding}, 
+				   1);
     $args->{Locator} = GetLocator($args->{Parser}, 
-				  $args->{Source}->{PublicId},
-				  $args->{Source}->{SystemId},
-				  $args->{Source}->{Encoding}
+				  $args->{Source}{PublicId} || '',
+				  $args->{Source}{SystemId} || '',
+				  $args->{Source}{Encoding} || '',
 				 );
     $args->{RecognizedString} = GetRecognizedString($args->{Parser});
     $args->{ExternEnt} = GetExternEnt($args->{Parser});
@@ -189,6 +192,7 @@ sub _get_external_entity {
 	croak ("Invalid object returned by EntityResolver: $src\n");
     }
 
+    local $/;
     undef $/;
     my $result = <$fh>;
     close($fh);
@@ -247,7 +251,7 @@ by default.
 =item C<http://xml.org/sax/features/xmlns-uris>
 
 This feature applies if and only if the C<http://xmlns.perl.org/sax/xmlns-uris>
-feture is off. Then, xmlns and xmlns:* attributes are both put into no namespace 
+feature is off. Then, xmlns and xmlns:* attributes are both put into no namespace 
 (0, default) or into C<http://www.w3.org/2000/xmlns/> namespace (1).
 
 =item C<http://xmlns.perl.org/sax/locator>

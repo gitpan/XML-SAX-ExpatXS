@@ -61,7 +61,7 @@ These methods are never called by XML::SAX::ExpatXS:
  ignorable_whitespace()
 
 
-This one is deprecated but works:
+This one is deprecated but if works with XML::SAX::ExpatXS:
 
  xml_decl()
 

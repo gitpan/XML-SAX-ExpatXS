@@ -1,13 +1,20 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.09 October 14, 2005
+    - {Source}{Encoding} is used (with higher priority 
+      than encoding specified in the XML declaration)
+    - fixed segfaults for undefined {Source} properties
+    - Expat localization improved in Makefile.PL
+    - localized setting of $/ in _get_external_entity
+
 1.08 April 22, 2005
     - feature 'http://xmlns.perl.org/sax/xmlns-uris'
       puts xmlns:* attributes into 
       the 'http://www.w3.org/2000/xmlns/' namespace
       and xmlns attributes into no namespace.
       The 'http://xml.org/sax/features/xmlns-uris'
-      applies if the new one is off.
+      applies only if the new one is off.
       The default behavior is the same as for other 
       Perl SAX parsers now.
     - fixed repeated parsing with Perl 5.6
@@ -120,5 +127,5 @@ Revision history for Perl extension XML::SAX::ExpatXS
     - test suite extended      
 
 0.90_01 May 13, 2002
-    - Initial release by Matt Sergeant 
+    - initial release by Matt Sergeant 
       (a working parser).

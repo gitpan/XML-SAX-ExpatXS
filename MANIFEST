@@ -53,6 +53,7 @@ t/25locator2.t
 t/26rec-string.t
 t/27parse.t
 t/28parse-uri.t
+t/29source.t
 t/f01join-chars.t
 t/f02ns-attributes.t
 t/f03locator.t
