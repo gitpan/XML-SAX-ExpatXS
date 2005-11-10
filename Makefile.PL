@@ -91,7 +91,7 @@ WriteMakefile(
     NAME => 'XML::SAX::ExpatXS',
     VERSION_FROM => 'lib/XML/SAX/ExpatXS.pm',
     PREREQ_PM => {
-		    'XML::SAX' => 0.12,
+		    'XML::SAX' => 0.13,
 		   },
     LIBS => $libs,
     @extras

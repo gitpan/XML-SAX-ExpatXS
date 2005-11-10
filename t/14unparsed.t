@@ -8,7 +8,8 @@ my $parser = XML::SAX::ExpatXS->new( Handler => $handler );
 my $xml =<<_xml_;
 <!DOCTYPE root [
   <!NOTATION nName PUBLIC "nPubId" "nSysId">
-  <!ENTITY ueName  PUBLIC "uePubId" "ueSysId" NDATA nName >
+  <!ENTITY ueName1  PUBLIC "uePubId" "ueSysId" NDATA nName >
+  <!ENTITY ueName2  SYSTEM "ueSysId" NDATA nName>
 ]>
 <root/>
 _xml_
@@ -16,7 +17,7 @@ _xml_
 $parser->parse_string($xml);
 
 #warn $handler->{data};
-ok($handler->{data} eq '_sd_nd_ue|ueName|uePubId|ueSysId|nName_se_ee_ed');
+ok($handler->{data}, '_sd_nd_ue|ueName1|uePubId|ueSysId|nName_ue|ueName2||ueSysId|nName_se_ee_ed');
 
 package TestH;
 #use Devel::Peek;

@@ -1,6 +1,23 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.10 November 10, 2005
+    - fixed start_entity() called for an external DTD subset if 
+      parameter entity parsing is in effect (ParseParamEnt option
+      setting XML_PARAM_ENTITY_PARSING_UNLESS_STANDALONE in Expat)
+      [using patches by Axel Eckenberger]
+    - resolve_entity() can return source with {String} now
+    - feature 'http://xml.org/sax/features/external-general-entities'
+      controls processing of external general entities
+    - feature 'http://xml.org/sax/features/external-parameter-entities'
+      controls processing of external parameter entities (the same as 
+      ParseParamEnt option)
+    - skipped_entity() implemented
+      [based on patch and tests by Axel Eckenberger]
+    - fixed segfault for unparsed entities without PublicId
+      [using patches by Axel Eckenberger]
+    - fixed leaks in entity callbacks
+
 1.09 October 14, 2005
     - {Source}{Encoding} is used (with higher priority 
       than encoding specified in the XML declaration)

@@ -14,7 +14,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.48 2005/04/22 08:47:19 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.53 2005/11/09 11:22:34 cvspetr Exp $
 */
 
 
@@ -59,6 +59,8 @@ typedef struct {
   int feat_locator;
   int feat_xmlns;
   int feat_perlxmlns;
+  int feat_entgen;
+  int feat_entpar;
 
   SV *recstring;
   char * delim;
@@ -66,7 +68,6 @@ typedef struct {
 
   unsigned ns:1;
   unsigned no_expand:1;
-  unsigned parseparam:1;
 
   /* Callback handlers */
   SV* start_sv;
@@ -958,7 +959,7 @@ elementDecl(void *data,
 }  /* End elementDecl */
 
 static void
-attributeDecl(void *data,
+attributeDecl(void * data,
           const char * elname,
           const char * attname,
           const char * att_type,
@@ -1002,6 +1003,41 @@ attributeDecl(void *data,
   LEAVE;
 }  /* End attributeDecl */
 
+static void 
+skippedEntity(void * data, 
+              const char * name, 
+              int isparam) {
+    dSP;
+    CallbackVector* cbv = (CallbackVector*) data;
+    HV * entity = newHV();
+    char* pname;
+    
+    xse_characters(data, cbv->chrbuffer);
+    if (cbv->feat_locator) XML_DefaultCurrent(cbv->p);
+    
+    pname = (char*) mymalloc(strlen(name) + 2);
+    strcpy(pname, "%");
+
+    hv_store(entity, "Name", 4, 
+             newUTF8SVpv((char*)(isparam ? strcat(pname, name) : name), 0), 
+             NameHash);
+
+    myfree(pname);
+    
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(sp);
+    EXTEND(sp, 2);
+    PUSHs(cbv->self_sv);
+    PUSHs(sv_2mortal(newRV_noinc((SV*)entity)));
+    PUTBACK;
+    perl_call_method("skipped_entity", G_DISCARD);
+
+    FREETMPS;
+    LEAVE;
+    
+} /* skippedEntity */
+
 static void
 entityDecl(void *data,
        const char *name,
@@ -1036,7 +1072,7 @@ entityDecl(void *data,
   if (value) {
     hv_store(node, "Value", 5, newUTF8SVpv((char *)value, vlen), 0);
 
-    PUSHs(newRV_noinc(sv_2mortal((SV*)node)));
+    PUSHs(sv_2mortal(newRV_noinc((SV*)node)));
     PUTBACK;
     perl_call_method("internal_entity_decl", G_DISCARD);
 
@@ -1077,6 +1113,7 @@ doctypeStart(void *userData,
   dSP;
   CallbackVector *cbv = (CallbackVector*) userData;
   HV *node = newHV();
+  char* key;
 
   hv_store(node, "Name", 4, newUTF8SVpv((char*)name, 0), NameHash);
   hv_store(node, "SystemId", 8, 
@@ -1097,6 +1134,14 @@ doctypeStart(void *userData,
   perl_call_method("start_dtd", G_DISCARD);
   FREETMPS;
   LEAVE;
+
+  /* storing entity name */
+  key = (char*) mymalloc(300);
+  xse_extern_ent_key(key, "", sysid, pubid);
+  hv_store(cbv->extern_hv, key, strlen(key),
+           newUTF8SVpv("[dtd]", 0), 0);
+  myfree(key);
+
 }  /* End doctypeStart */
 
 static void
@@ -1172,7 +1217,8 @@ unparsedEntityDecl(void *userData,
   HV *node = newHV();
 
   hv_store(node, "Name", 4, newUTF8SVpv((char*)entity, 0), NameHash);
-  hv_store(node, "PublicId", 8, newUTF8SVpv((char*)pubid, 0), PublicIdHash);
+  hv_store(node, "PublicId", 8, pubid ? newUTF8SVpv((char*)pubid, 0) 
+                  : SvREFCNT_inc(empty_sv), PublicIdHash);
   hv_store(node, "SystemId", 8, newUTF8SVpv((char*)sysid, 0), SystemIdHash);
   hv_store(node, "Notation", 8, newUTF8SVpv((char*)notation, 0), 0);
 
@@ -1233,19 +1279,24 @@ externalEntityRef(XML_Parser parser,
   SV **name;
   HV *start = newHV();
   HV *end = newHV();
+  char* pname;
 
   xse_characters((void*)cbv, cbv->chrbuffer);
-
-  /* FEATURE ? skipped_entity : go on 
-  if (FEATURE)
-    return 0;
-  */
 
   /* fetching entity name */
   key = (char*) mymalloc(300);
   xse_extern_ent_key(key, base, sysid, pubid);
   name = hv_fetch(cbv->extern_hv, key, strlen(key), 0);
   myfree(key);
+
+  pname = SvPV_nolen(*name);
+
+  if (( (pname[0] == '[' || pname[0] == '%') && !cbv->feat_entpar) || 
+      ( (pname[0] != '[' && pname[0] != '%') && !cbv->feat_entgen)) {
+
+      skippedEntity(cbv, pname, 0);
+      return 1;
+  }
 
   ENTER ;
   SAVETMPS ;
@@ -1319,7 +1370,7 @@ externalEntityRef(XML_Parser parser,
 	}
 
         if (count > 0)
-          ret = POPi;
+        ret = POPi;
 	/* warn("external parsing return value: %d", ret); */
         parse_done = 1;
 
@@ -1338,12 +1389,12 @@ externalEntityRef(XML_Parser parser,
     append_error(parser, "Handler couldn't resolve external entity");
 
   /* end entity */
-  hv_store(end, "Name", 4, *name, NameHash);
+  hv_store(end, "Name", 4, SvREFCNT_inc(*name), NameHash);
 
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs(newRV_noinc((SV*)end));
+  PUSHs(sv_2mortal(newRV_noinc((SV*)end)));
   PUTBACK;
   perl_call_method("end_entity", G_DISCARD);
 
@@ -1513,7 +1564,7 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
     CODE:
     {
       CallbackVector *cbv;
-      enum XML_ParamEntityParsing pep = XML_PARAM_ENTITY_PARSING_NEVER;
+      enum XML_ParamEntityParsing pep = XML_PARAM_ENTITY_PARSING_UNLESS_STANDALONE;
       char *enc = (char *) (SvTRUE(enc_sv) ? SvPV(enc_sv,PL_na) : 0);
       SV ** spp;
 
@@ -1566,32 +1617,38 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
       XML_SetXmlDeclHandler(RETVAL, xmlDecl);
       XML_SetStartDoctypeDeclHandler(RETVAL, doctypeStart);
       XML_SetEndDoctypeDeclHandler(RETVAL, doctypeEnd);
-
+      XML_SetSkippedEntityHandler(RETVAL, skippedEntity);
       XML_SetUnknownEncodingHandler(RETVAL, unknownEncoding, 0);
 
-      if (cbv->no_expand)
-	XML_SetDefaultHandler(RETVAL, recString);
-      else
-	XML_SetDefaultHandlerExpand(RETVAL, recString);
-
-      spp = hv_fetch((HV*)SvRV(cbv->self_sv), "ParseParamEnt",
-             13, FALSE);
-
-      if (spp && SvTRUE(*spp)) {
-        pep = XML_PARAM_ENTITY_PARSING_UNLESS_STANDALONE;
-        cbv->parseparam = 1;
-      }
-
-      XML_SetParamEntityParsing(RETVAL, pep);
-
-      cbv->atts_ready = 0;
-      cbv->chrbuffer = newUTF8SVpv("", 0);
+      /* reading features */
       cbv->feat_perlxmlns = get_feature(cbv, "http://xmlns.perl.org/sax/xmlns-uris");
       cbv->feat_xmlns = cbv->feat_perlxmlns 
           ? 0 : get_feature(cbv, "http://xml.org/sax/features/xmlns-uris");
       cbv->feat_join = get_feature(cbv, "http://xmlns.perl.org/sax/join-character-data");
       cbv->feat_nsatts = get_feature(cbv, "http://xmlns.perl.org/sax/ns-attributes");
       cbv->feat_locator = get_feature(cbv, "http://xmlns.perl.org/sax/locator");
+      cbv->feat_entgen = get_feature(cbv, "http://xml.org/sax/features/external-general-entities");
+      cbv->feat_entpar = get_feature(cbv, "http://xml.org/sax/features/external-parameter-entities");
+      /* end of reading features */
+
+      if (cbv->no_expand)
+	XML_SetDefaultHandler(RETVAL, recString);
+      else
+	XML_SetDefaultHandlerExpand(RETVAL, recString);
+
+      if (!cbv->feat_entpar) {
+          spp = hv_fetch((HV*)SvRV(cbv->self_sv), "ParseParamEnt",
+                         13, FALSE);
+
+          if (spp && SvTRUE(*spp)) {
+              cbv->feat_entpar = 1;
+          }
+      }
+
+      XML_SetParamEntityParsing(RETVAL, pep);
+
+      cbv->atts_ready = 0;
+      cbv->chrbuffer = newUTF8SVpv("", 0);
     }
     OUTPUT:
     RETVAL

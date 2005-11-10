@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.35 2005/10/14 10:28:48 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.39 2005/11/10 09:38:31 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -10,7 +10,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.09';
+$VERSION = '1.10';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -18,6 +18,7 @@ XML::SAX::ExpatXS->bootstrap($VERSION);
 my @features = (
 	['http://xml.org/sax/features/namespaces', 1],
 	['http://xml.org/sax/features/external-general-entities', 1],
+	['http://xml.org/sax/features/external-parameter-entities', 0],
         ['http://xml.org/sax/features/xmlns-uris', 0],
         ['http://xmlns.perl.org/sax/xmlns-uris', 1],
         ['http://xmlns.perl.org/sax/version-2.1', 1],
@@ -174,6 +175,8 @@ sub _get_external_entity {
     my $src = $self->resolve_entity({PublicId => $pubid, 
 				     SystemId => $sysid});
     my $fh;
+    my $result;
+    my $string;
     if (ref($src) eq 'CODE') {
 	$fh = IO::File->new($sysid)
 	  or croak("Can't open external entity: $sysid\n");
@@ -181,8 +184,14 @@ sub _get_external_entity {
     } elsif (ref($src) eq 'HASH') {
 	if (defined $src->{CharacterStream}) {
 	    $fh = $src->{CharacterStream};
+
 	} elsif (defined $src->{ByteStream}) {
 	    $fh = $src->{ByteStream};
+
+	} elsif (defined $src->{String}) {
+	    $result = $src->{String};
+	    $string = 1;
+
 	} else {
 	    $fh = IO::File->new($src->{SystemId})
 	      or croak("Can't open external entity: $src->{SystemId}\n");
@@ -192,10 +201,12 @@ sub _get_external_entity {
 	croak ("Invalid object returned by EntityResolver: $src\n");
     }
 
-    local $/;
-    undef $/;
-    my $result = <$fh>;
-    close($fh);
+    unless ($string) {
+	local $/;
+	undef $/;
+	$result = <$fh>;
+	close($fh);
+    }
     return $result;
 }
 
@@ -221,7 +232,7 @@ XML::SAX::ExpatXS - Perl SAX 2 XS extension to Expat parser
 XML::SAX::ExpatXS is a direct XS extension to Expat XML parser. It implements
 Perl SAX 2.1 interface. See http://perl-xml.sourceforge.net/perl-sax/ for
 Perl SAX API description. Any deviations from the Perl SAX 2.1 specification 
-are considered to be bugs.
+are considered as bugs.
 
 =head2 Features
 
@@ -257,6 +268,41 @@ feature is off. Then, xmlns and xmlns:* attributes are both put into no namespac
 =item C<http://xmlns.perl.org/sax/locator>
 
 Document locator is updated (1, default) for ContentHadler events or not (0).
+
+=item C<http://xml.org/sax/features/external-general-entities>
+
+Controls whether this parser processes external general entities (1, default)
+or not (0).
+
+=item C<http://xml.org/sax/features/external-parameter-entities>
+
+Controls whether this parser processes external parameter entities including 
+an external DTD subset (1) or not (0, default).
+
+=back
+
+=head2 Constructor Options
+
+Apart from features, the behavior of this parser can also be changed with
+options to the constructor.
+
+=over
+
+=item ParseParamEnt
+
+ ParseParamEnt => 1
+
+This option meaning is exactly the same as 
+the C<http://xml.org/sax/features/external-parameter-entities> feature. 
+The option is supported only because of the compatibility with older versions
+of this module. Turned off by default.
+
+=item NoExpand
+
+ NoExpand => 1
+
+No internal entities are expanded if this option is turned on.
+Turned off by default.
 
 =back
 

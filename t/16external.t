@@ -18,7 +18,7 @@ _xml_
 $parser->parse_string($xml);
 
 #warn $handler->{data};
-ok($handler->{data} eq '_sD_sDtd_eDec(external,extPubID,t/external.xml)_eDtd_sE(root)_sEnt(external)_sE(boo)_eE_eEnt(external)_eE_eD');
+ok($handler->{data}, '_sD_sDtd_eDec(external,extPubID,t/external.xml)_eDtd_sE(root)_sEnt(external)_sE(boo)_eE_eEnt(external)_eE_eD');
 
 package TestH;
 #use Devel::Peek;

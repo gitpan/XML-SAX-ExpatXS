@@ -1,5 +1,5 @@
 use Test;
-BEGIN { plan tests => 1 }
+BEGIN { plan tests => 2 }
 use XML::SAX::ExpatXS;
 
 my $handler = TestH->new();
@@ -8,16 +8,23 @@ my $parser = XML::SAX::ExpatXS->new( Handler => $handler );
 my $xml =<<_xml_;
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE root [
-  <!ENTITY % par "par_entity_value">
-  <!ENTITY int "int_entity_value">
+  <!ENTITY external PUBLIC "extPubID" "t/external.xml">
 ]>
-<root/>
+<root>
+&external;
+</root>
 _xml_
 
 $parser->parse_string($xml);
 
-#warn "$handler->{data}";
-ok($handler->{data} eq '_sD_sDtd_iDec(%par,par_entity_value)_iDec(int,int_entity_value)_eDtd_sE(root)_eE_eD');
+$parser->set_feature('http://xml.org/sax/features/external-general-entities', 0);
+
+ok($handler->{data}, '_sD_sDtd_eDec(external,extPubID,t/external.xml)_eDtd_sE(root)_sEnt(external)_sE(boo)_eE_eEnt(external)_eE_eD');
+$handler->{data} = '';
+
+$parser->parse_string($xml);
+
+ok($handler->{data}, '_sD_sDtd_eDec(external,extPubID,t/external.xml)_eDtd_sE(root)_eE_eD');
 
 package TestH;
 #use Devel::Peek;
@@ -27,14 +34,14 @@ sub new { bless {data => ''}, shift }
 sub start_document {
     my ($self, $doc) = @_;
     #warn("StartDoc:\n");
-    #Dump($doc);
+    #Dump($el);
     $self->{data} .= '_sD';
 }
 
 sub end_document {
     my ($self, $doc) = @_;
     #warn("EndDoc:\n");
-    #Dump($doc);
+    #Dump($el);
     $self->{data} .= '_eD';
 }
 
@@ -73,18 +80,16 @@ sub external_entity_decl {
     $self->{data} .= "_eDec($ent->{Name},$ent->{PublicId},$ent->{SystemId})";
 }
 
-sub internal_entity_decl {
+sub start_entity {
     my ($self, $ent) = @_;
-    #warn("IntEntDecl:$ent->{Name},$ent->{Value}\n");
+    #warn("StartEnt:$ent->{Name}\n");
     #Dump($ent);
-    $self->{data} .= "_iDec($ent->{Name},$ent->{Value})";
+    $self->{data} .= "_sEnt($ent->{Name})";
 }
 
-sub characters {
-    my ($self, $ch) = @_;
-    $ch->{Data} =~ s/\n/N/g;
-    #warn("Char:$ch->{Data}\n");
-    #Dump($ch);
-    $self->{data} .= "_ch($ch->{Data})";
+sub end_entity {
+    my ($self, $ent) = @_;
+    #warn("EndEnt:$ent->{Name}\n");
+    #Dump($ent);
+    $self->{data} .= "_eEnt($ent->{Name})";
 }
-

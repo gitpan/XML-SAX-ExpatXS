@@ -1,11 +1,14 @@
 use Test;
 BEGIN { plan tests => 2 }
 use XML::SAX::ExpatXS;
+use IO::File;
 
 my $handler = TestH->new();
 my $parser = XML::SAX::ExpatXS->new( Handler => $handler );
 
-$parser->parse_uri('t/file.xml');
+my $file = IO::File->new('t/file.xml');
+
+$parser->parse_file($file);
 
 #warn "$handler->{start}:$handler->{end}";
 ok($handler->{start}, 72);
@@ -14,8 +17,7 @@ ok($handler->{end}, 72);
 package TestH;
 #use Devel::Peek;
 
-sub new { bless {start => 0, end => 0}, shift }
-
+sub new { bless {data => ''}, shift }
 
 sub start_element {
     my ($self, $el) = @_;
@@ -30,4 +32,3 @@ sub end_element {
     #Dump($el);
     $self->{end}++;
 }
-
