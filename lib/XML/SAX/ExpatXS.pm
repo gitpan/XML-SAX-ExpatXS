@@ -1,4 +1,4 @@
-# $Id: ExpatXS.pm,v 1.39 2005/11/10 09:38:31 cvspetr Exp $
+# $Id: ExpatXS.pm,v 1.42 2006/04/04 11:46:38 cvspetr Exp $
 
 package XML::SAX::ExpatXS;
 use strict;
@@ -10,7 +10,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.10';
+$VERSION = '1.20';
 @ISA = qw(DynaLoader XML::SAX::Base);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -94,15 +94,15 @@ sub _parse_bytestream {
 }
 
 sub _parse_string {
-    my $self = shift;
+    my ($self, $str) = @_;
     $self->{ParseOptions}->{ParseFunc} = \&ParseString;
-    $self->{ParseOptions}->{ParseFuncParam} = $_[0];
+    $self->{ParseOptions}->{ParseFuncParam} = $str;
     $self->_parse;
 }
 
 sub _parse_systemid {
-    my $self = shift;
-    my $fh = IO::File->new(shift);
+    my ($self, $uri) = @_;
+    my $fh = IO::File->new($uri) or croak "ExpatXS: Can't open $uri ($!)";
     $self->{ParseOptions}->{ParseFunc} = \&ParseStream;
     $self->{ParseOptions}->{ParseFuncParam} = $fh;
     $self->_parse;

@@ -1,6 +1,12 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.20 April 7, 2006
+    - speed optimizations - data structures reused: start_element() 
+      hash reused by end_element() call when free, characters() hash 
+      recycled when free
+    - better error message when parse_uri fails
+
 1.10 November 10, 2005
     - fixed start_entity() called for an external DTD subset if 
       parameter entity parsing is in effect (ParseParamEnt option
@@ -62,7 +68,7 @@ Revision history for Perl extension XML::SAX::ExpatXS
       entity in Locator and Exception
       [reported by Bjoern Hoehrmann]
     - recognized string made available
-      as $p->{ParseOptions}->{RecognizedString}
+      as $p->{ParseOptions}{RecognizedString}
     - ParserOptions renamed to ParseOptions to match 
       XML::SAX::Base
     - minor fixes for make test

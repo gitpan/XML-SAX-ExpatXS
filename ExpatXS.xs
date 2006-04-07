@@ -14,7 +14,7 @@
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.53 2005/11/09 11:22:34 cvspetr Exp $
+** $Id: ExpatXS.xs,v 1.56 2006/03/27 15:01:48 cvspetr Exp $
 */
 
 
@@ -80,6 +80,7 @@ typedef struct {
   HV* locator_hv;
   HV* extern_hv;  
   SV* chrbuffer;
+  HV* chr_hv;
 
 } CallbackVector;
 
@@ -566,32 +567,38 @@ sendCharacterData(void *userData, SV *buffer)
 {
   dSP;
   CallbackVector* cbv = (CallbackVector*) userData;
-  HV *thing;
   SV *data;
 
   if (cbv->feat_locator && !cbv->feat_join)
     XML_DefaultCurrent(cbv->p);
 
-  thing = newHV();
+  /* warn("char refcnt: %d\n", SvREFCNT(cbv->chr_hv)); */
+  if (SvREFCNT(cbv->chr_hv) == 1) {
+      SvREFCNT_inc(cbv->chr_hv);
+
+  } else {
+      cbv->chr_hv = newHV();
+  }
+
   /* can't be the same struct as buffer */
   data = newSVsv(buffer);
 
   ENTER;
   SAVETMPS;
 
-  hv_store(thing, "Data", 4, data, DataHash);
+  hv_store(cbv->chr_hv, "Data", 4, data, DataHash);
 
   PUSHMARK(sp);
   EXTEND(sp, 2);
   PUSHs(cbv->self_sv);
-  PUSHs(sv_2mortal(newRV_noinc((SV*)thing)));
+  PUSHs(sv_2mortal(newRV_noinc((SV*)cbv->chr_hv)));
   PUTBACK;
   perl_call_sv(cbv->char_sv, G_DISCARD);
 
   FREETMPS;
   LEAVE;
 
-  /* warn("leaving ch: %d\n", SvREFCNT((SV*)thing)); */
+  /* warn("leaving ch: %d\n", SvREFCNT((SV*)cvbv->chr_hv)); */
 } /* End sendCharacterData */
 
 static void
@@ -700,18 +707,27 @@ endElement(void *userData, const char *name)
   SAVETMPS;
 
   node = (HV*)SvRV(top);
+  /* warn("startEl refcnt: %d\n", SvREFCNT(node)); */
 
-  end_node = newHV();
+  if (SvREFCNT(node) == 1) {
+      /* reusing the same struct as in start_element */
+      end_node = node;
+      hv_delete(end_node, "Attributes", 10, G_DISCARD);
+      SvREFCNT_inc(node);
 
-  /* copy the node (can't be the same struct as in start_element */
-  hv_iterinit(node);
-  while (next = hv_iternext(node)) {
-      U32 keylen;
-      char *key = hv_iterkey(next, &keylen);
-      SV *value = hv_iterval(node, next);
-      if (strncmp(key, "Attributes", 10) != 0) {
-          // copy everything except attributes 
-          hv_store(end_node, key, keylen, newSVsv(value), 0);
+  } else {
+      /* copy the node (can't be the same struct as in start_element */
+      end_node = newHV();
+
+      hv_iterinit(node);
+      while (next = hv_iternext(node)) {
+          U32 keylen;
+          char *key = hv_iterkey(next, &keylen);
+          SV *value = hv_iterval(node, next);
+          if (strncmp(key, "Attributes", 10) != 0) {
+              // copy everything except attributes 
+              hv_store(end_node, key, keylen, newSVsv(value), 0);
+          }
       }
   }
 
@@ -1649,6 +1665,7 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
 
       cbv->atts_ready = 0;
       cbv->chrbuffer = newUTF8SVpv("", 0);
+      cbv->chr_hv = newHV();
     }
     OUTPUT:
     RETVAL
@@ -1678,6 +1695,7 @@ XML_ParserFree(parser)
 
       SvREFCNT_dec(cbv->locator_hv);
       SvREFCNT_dec(cbv->extern_hv);
+      SvREFCNT_dec(cbv->chr_hv);
 
       Safefree(cbv);
       XML_ParserFree(parser);
