@@ -5,13 +5,14 @@ use strict;
 use vars qw($VERSION @ISA);
 
 use XML::SAX::ExpatXS::Encoding;
+use XML::SAX::ExpatXS::Preload;
 use XML::SAX::Base;
 use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.20';
-@ISA = qw(DynaLoader XML::SAX::Base);
+$VERSION = '1.30';
+@ISA = qw(DynaLoader XML::SAX::Base XML::SAX::ExpatXS::Preload);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
 
@@ -24,7 +25,8 @@ my @features = (
         ['http://xmlns.perl.org/sax/version-2.1', 1],
 	['http://xmlns.perl.org/sax/join-character-data', 1],
 	['http://xmlns.perl.org/sax/ns-attributes', 1],
-	['http://xmlns.perl.org/sax/locator', 1]
+	['http://xmlns.perl.org/sax/locator', 1],
+	['http://xmlns.perl.org/sax/recstring', 0]
 			 );
 my @supported_features = map($_->[0], @features);
 
@@ -40,6 +42,8 @@ sub new {
     foreach (@features) {
 	$options->{Features}->{$_->[0]} = $_->[1];
     }
+
+    $options->{ExpatVersion} = ExpatVersion();
 
     return $proto->SUPER::new($options);
 }
@@ -123,7 +127,6 @@ sub _parse {
     $args->{DeclHandler} = $self->{DeclHandler};
     $args->{ErrorHandler} = $self->{ErrorHandler};
     $args->{EntityResolver} = $self->{EntityResolver};
-    $args->{Features} = $self->{Features};
 
     $args->{_State_} = 0;
     $args->{Context} = [];
@@ -141,11 +144,18 @@ sub _parse {
     $args->{RecognizedString} = GetRecognizedString($args->{Parser});
     $args->{ExternEnt} = GetExternEnt($args->{Parser});
 
+    $args->{Methods} = {};
+    $args->get_start_element();
+    $args->get_end_element();
+    $args->get_characters();
+    $args->get_comment();
+
     # the most common handlers are available as refs
     SetCallbacks($args->{Parser}, 
- 		 \&XML::SAX::Base::start_element,
- 		 \&XML::SAX::Base::end_element,
- 		 \&XML::SAX::Base::characters,
+		 $args->{Methods}->{start_element},
+		 $args->{Methods}->{end_element},
+		 $args->{Methods}->{characters},
+		 $args->{Methods}->{comment},
   		);
 
     $args->set_document_locator($args->{Locator});
@@ -210,6 +220,12 @@ sub _get_external_entity {
     return $result;
 }
 
+sub _get_handler_methods {
+    my $self = shift;
+
+
+}
+
 1;
 __END__
 
@@ -267,7 +283,13 @@ feature is off. Then, xmlns and xmlns:* attributes are both put into no namespac
 
 =item C<http://xmlns.perl.org/sax/locator>
 
-Document locator is updated (1, default) for ContentHadler events or not (0).
+The document locator is updated (1, default) for ContentHadler events or not (0).
+
+=item C<http://xmlns.perl.org/sax/recstring>
+
+A recognized string (the text string currently processed by this XML parser) 
+is either maintained as $parser->{ParseOptions}{RecognizedString} (1) or not 
+(0, default).
 
 =item C<http://xml.org/sax/features/external-general-entities>
 
@@ -306,9 +328,20 @@ Turned off by default.
 
 =back
 
+=head2 Read-only Properties
+
+=over
+
+=item ExpatVersion
+
+This property returns a version of linked Expat library, for example 
+expat_1.95.7.
+
+=back
+
 =head1 AUTHORS
 
- Matt Sergeant <matt AT sergeant DOT org>
  Petr Cimprich <petr AT gingerall DOT org> (maintainer)
+ Matt Sergeant <matt AT sergeant DOT org>
 
 =cut

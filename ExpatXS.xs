@@ -57,6 +57,7 @@ typedef struct {
   int feat_join;
   int feat_nsatts;
   int feat_locator;
+  int feat_recstring;
   int feat_xmlns;
   int feat_perlxmlns;
   int feat_entgen;
@@ -73,6 +74,7 @@ typedef struct {
   SV* start_sv;
   SV* end_sv;
   SV* char_sv;
+  SV* comment_sv;
 
   HV* atts;
   int atts_ready;
@@ -589,8 +591,8 @@ sendCharacterData(void *userData, SV *buffer)
   hv_store(cbv->chr_hv, "Data", 4, data, DataHash);
 
   PUSHMARK(sp);
-  EXTEND(sp, 2);
-  PUSHs(cbv->self_sv);
+  EXTEND(sp, 1);
+  /* PUSHs(cbv->self_sv); */
   PUSHs(sv_2mortal(newRV_noinc((SV*)cbv->chr_hv)));
   PUTBACK;
   perl_call_sv(cbv->char_sv, G_DISCARD);
@@ -673,8 +675,8 @@ startElement(void *userData, const char *name, const char **atts)
     element = newRV_noinc((SV*)node);
 
     PUSHMARK(sp);
-    EXTEND(sp, 2);
-    PUSHs(cbv->self_sv);
+    EXTEND(sp, 1);
+    /* PUSHs(cbv->self_sv); */
     PUSHs(element);
     PUTBACK;
     perl_call_sv(cbv->start_sv, G_DISCARD);
@@ -732,8 +734,8 @@ endElement(void *userData, const char *name)
   }
 
   PUSHMARK(sp);
-  EXTEND(sp, 2);
-  PUSHs(cbv->self_sv);
+  EXTEND(sp, 1);
+  /* PUSHs(cbv->self_sv); */
   PUSHs(sv_2mortal(newRV_noinc((SV*)end_node)));
   PUTBACK;
   perl_call_sv(cbv->end_sv, G_DISCARD);
@@ -788,11 +790,12 @@ commenthandle(void *userData, const char *string)
   SAVETMPS;
 
   PUSHMARK(sp);
-  EXTEND(sp, 2);
-  PUSHs(cbv->self_sv);
+  EXTEND(sp, 1);
+  /* PUSHs(cbv->self_sv); */
   PUSHs(sv_2mortal(newRV_noinc((SV*)thing)));
   PUTBACK;
-  perl_call_method("comment", G_DISCARD);
+  perl_call_sv(cbv->comment_sv, G_DISCARD);
+  /* perl_call_method("comment", G_DISCARD); */
 
   FREETMPS;
   LEAVE;
@@ -1545,11 +1548,13 @@ recString(void *userData, const char *string, int len)
   hv_store(cbv->locator_hv, "LineNumber", 10, newSViv(ln), 0);
   hv_store(cbv->locator_hv, "ColumnNumber", 12, newSViv(cl), 0);
 
-  if (SvCUR(cbv->chrbuffer) > 0) {
-    sv_setsv(cbv->recstring, cbv->chrbuffer);
-  } else {
-    sv_setpvn(cbv->recstring, (char *) string, len);
-  }   
+  if (cbv->feat_recstring) {
+    if (SvCUR(cbv->chrbuffer) > 0) {
+      sv_setsv(cbv->recstring, cbv->chrbuffer);
+    } else {
+      sv_setpvn(cbv->recstring, (char *) string, len);
+    }
+  }
 }  /* End recString */
 
 MODULE = XML::SAX::ExpatXS PACKAGE = XML::SAX::ExpatXS    PREFIX = XML_
@@ -1643,6 +1648,7 @@ XML_ParserCreate(self_sv, enc_sv, namespaces)
       cbv->feat_join = get_feature(cbv, "http://xmlns.perl.org/sax/join-character-data");
       cbv->feat_nsatts = get_feature(cbv, "http://xmlns.perl.org/sax/ns-attributes");
       cbv->feat_locator = get_feature(cbv, "http://xmlns.perl.org/sax/locator");
+      cbv->feat_recstring = get_feature(cbv, "http://xmlns.perl.org/sax/recstring");
       cbv->feat_entgen = get_feature(cbv, "http://xml.org/sax/features/external-general-entities");
       cbv->feat_entpar = get_feature(cbv, "http://xml.org/sax/features/external-parameter-entities");
       /* end of reading features */
@@ -1690,6 +1696,7 @@ XML_ParserFree(parser)
       SvREFCNT_dec(cbv->start_sv);
       SvREFCNT_dec(cbv->end_sv);
       SvREFCNT_dec(cbv->char_sv);
+      SvREFCNT_dec(cbv->comment_sv);
       SvREFCNT_dec(cbv->chrbuffer);
       SvREFCNT_dec(cbv->self_sv);
 
@@ -1885,11 +1892,12 @@ XML_GetExternEnt(parser)
     RETVAL
 
 void
-XML_SetCallbacks(parser, start, end, chars)
+XML_SetCallbacks(parser, start, end, chars, comment)
     XML_Parser            parser
     SV *		  start
     SV *		  end
     SV *		  chars
+    SV *		  comment
     CODE:
     {
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
@@ -1902,6 +1910,9 @@ XML_SetCallbacks(parser, start, end, chars)
 
       if (cbv->char_sv) sv_setsv(cbv->char_sv, chars);    
       else cbv->char_sv = SvREFCNT_inc(chars);
+
+      if (cbv->comment_sv) sv_setsv(cbv->comment_sv, comment);    
+      else cbv->comment_sv = SvREFCNT_inc(comment);
     }
 
 void
@@ -1971,7 +1982,6 @@ XML_DefaultCurrent(parser)
       XML_DefaultCurrent(parser);
     }
 
-
 int
 XML_GetErrorCode(parser)
     XML_Parser            parser
@@ -1980,10 +1990,12 @@ int
 XML_GetCurrentLineNumber(parser)
     XML_Parser            parser
 
-
 int
 XML_GetCurrentColumnNumber(parser)
     XML_Parser            parser
+
+const char *
+XML_ExpatVersion()
 
 long
 XML_GetCurrentByteIndex(parser)
@@ -2003,7 +2015,7 @@ XML_ErrorString(code)
 
 SV *
 XML_LoadEncoding(data, size)
-    char *                data
+    char *             data
     int                size
     CODE:
     {

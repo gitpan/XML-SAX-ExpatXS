@@ -64,6 +64,7 @@ t/f04xmlns-uris.t
 t/f05xmlns-uris2.t
 t/f06ext-general.t
 t/f07ext-param.t
+t/f08expatversion.t
 t/external.xml
 t/file.xml
 t/file2.xml

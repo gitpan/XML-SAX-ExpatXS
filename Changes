@@ -1,6 +1,15 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.30 July 2, 2007
+    - speed optimizations - main callback functions (start_element,
+      end_element, characters, comment) resolved in advance using 
+      XML::SAX::ExpatXS::Preload module
+    - feature 'http://xmlns.perl.org/sax/recstring' controls whether
+      a recognized string is available as {RecognizedString} among 
+      {ParseOptions} (not by default as this is rather expensive).
+    - added {ExpatVersion} property
+
 1.20 April 7, 2006
     - speed optimizations - data structures reused: start_element() 
       hash reused by end_element() call when free, characters() hash 

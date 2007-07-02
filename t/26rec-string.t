@@ -18,6 +18,7 @@ my $xml =<<_xml_;
 _xml_
 
 $parser->set_feature('http://xmlns.perl.org/sax/join-character-data',1);
+$parser->set_feature('http://xmlns.perl.org/sax/recstring',1);
 $parser->parse_string($xml);
 
 #warn $handler->{data};

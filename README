@@ -3,8 +3,9 @@ README file for Perl extension XML::SAX::ExpatXS
 
 1. Introduction
 2. Dependencies
-3. Callbacks
-4. Encoding
+3. Installation
+4. Callbacks
+5. Encoding
 
 
 1.Introduction
@@ -28,15 +29,49 @@ appreciated.
 This module requires Expat XML parser. XML::SAX::ExpatXS 1.10 
 or higher requires Expat 1.95.4 or higher (because 
 of XML_SetSkippedEntityHandler). For older Expat versions, it 
-is recommended to use XML::SAX::ExpatXS 1.09. 
+is recommended to use XML::SAX::ExpatXS 1.09.
 
-Required Perl modules are XML::Namespace Support and XML::SAX.
+You can download Expat from: http://expat.sourceforge.net/
+
+Required Perl modules are: 
+
+	XML::NamespaceSupport
+	XML::SAX
 
 
-3. Callbacks
+3. Installation
 ------------------------------
 
-These PerlSAX callbacks are supported and tested:
+perl Makefile.PL
+make
+make test
+make install
+
+You will need a C compiler to build this module from sources. Other 
+option is to install a binary PPM package.
+
+Expat must be installed prior to building XML::SAX::ExpatXS.
+If expat is installed, but in a non-standard directory, then use 
+the following options to Makefile.PL:
+
+    EXPATLIBPATH=...  To set the directory in which to find libexpat
+
+    EXPATINCPATH=...  To set the directory in which to find expat.h
+
+For example:
+
+    perl Makefile.PL EXPATLIBPATH=/home/me/lib EXPATINCPATH=/home/me/include
+
+Note that if you build against a shareable library in a non-standard 
+location you may (on some platforms) also have to set your LD_LIBRARY_PATH 
+environment variable at run time for perl to find the library. On Windows, 
+you have to set your PATH environment variable.
+
+
+4. Callbacks
+------------------------------
+
+These Perl SAX callbacks are supported and tested:
 
  start_document()
  end_document()
@@ -70,13 +105,12 @@ These methods are never called by XML::SAX::ExpatXS:
  error()
  ignorable_whitespace()
 
-
-This one is deprecated but if works with XML::SAX::ExpatXS:
+This one is deprecated but it works with XML::SAX::ExpatXS:
 
  xml_decl()
 
 
-4. Encoding
+5. Encoding
 ------------------------------
 
 These charsets and encodings are supported:
