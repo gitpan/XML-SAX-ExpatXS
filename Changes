@@ -1,6 +1,11 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
 
+1.31 July 3, 2007
+    - Security fix: namespace separator in XML_ParserCreate_MM
+      changed from '}' to -1, related to SF.net bug 1742315 
+      [suggested by Bjoern Hoehrmann]
+
 1.30 July 2, 2007
     - speed optimizations - main callback functions (start_element,
       end_element, characters, comment) resolved in advance using 

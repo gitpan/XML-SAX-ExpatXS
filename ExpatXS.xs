@@ -8,13 +8,12 @@
 ** The file has been modified for purposes of XML::SAX::ExpatXS 
 ** by Matt Sergeant and Petr Cimprich.
 **
-** Copyright 1998-2004 by authors of respective parts.
+** Copyright 1998-2007 by authors of respective parts.
 ** All rights reserved.
 **
 ** This program is free software; you can redistribute it and/or
 ** modify it under the same terms as Perl itself.
 **
-** $Id: ExpatXS.xs,v 1.56 2006/03/27 15:01:48 cvspetr Exp $
 */
 
 
@@ -44,7 +43,7 @@
 
 #define BUFSIZE 32768
 
-#define NSDELIM  '}'
+#define NSDELIM -1
 
 typedef struct {
   SV* self_sv;
@@ -657,7 +656,7 @@ startElement(void *userData, const char *name, const char **atts)
             sv_catpvn(keyname, key, pos - key);
 	    // -pc -
             sv_catpvn(keyname, "}", 1);
-            sv_catpv(keyname, strstr(key, "}")+1);
+            sv_catpv(keyname, strchr(key, NSDELIM)+1);
 
         }
         else {
