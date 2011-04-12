@@ -304,9 +304,9 @@ append_error(XML_Parser parser, char * err)
   msg = (char *)mymalloc(strlen(err) + 50);
   sprintf(msg, "%s at line %d, column %d, byte %d",
           err,
-          XML_GetCurrentLineNumber(parser),
-          XML_GetCurrentColumnNumber(parser)+1,
-          XML_GetCurrentByteIndex(parser));
+          (int)XML_GetCurrentLineNumber(parser),
+          (int)XML_GetCurrentColumnNumber(parser)+1,
+          (int)XML_GetCurrentByteIndex(parser));
 
   public = hv_fetch(cbv->locator_hv, "PublicId", 8, 0);
   system = hv_fetch(cbv->locator_hv, "SystemId", 8, 0);
@@ -383,17 +383,17 @@ static int
 parse_stream(XML_Parser parser, SV * ioref)
 {
   dSP;
-  SV *        tbuff;
-  SV *        tsiz;
+  SV *      tbuff;
+  SV *      tsiz;
   char *    linebuff;
   STRLEN    lblen;
   STRLEN    br = 0;
-  int        buffsize;
-  int        done = 0;
-  int        ret = 1;
+  int       buffsize;
+  int       done = 0;
+  int       ret = 1;
   char *    msg = NULL;
   CallbackVector * cbv;
-  char        *buff = (char *) 0;
+  char      *buff = (char *) 0;
 
   cbv = (CallbackVector*) XML_GetUserData(parser);
 
@@ -402,7 +402,7 @@ parse_stream(XML_Parser parser, SV * ioref)
 
   if (cbv->delim) {
     int cnt;
-    SV * tline;
+    SV *tline;
 
     PUSHMARK(SP);
     XPUSHs(ioref);
@@ -1377,7 +1377,7 @@ externalEntityRef(XML_Parser parser,
 
 	if (SvTRUE(ERRSV)) {
 	  char  *hold;
-	  int   len;
+	  STRLEN   len;
 
 	  POPs;
           hold = SvPV(ERRSV, len);
@@ -1715,7 +1715,7 @@ XML_ParseString(parser, str)
         {
       CallbackVector * cbv;
       char * s;
-      int len;
+      STRLEN len;
       
       s = SvPV(str, len);
 
@@ -1763,7 +1763,7 @@ XML_ParsePartial(parser, str)
     {
       CallbackVector * cbv = (CallbackVector *) XML_GetUserData(parser);
       char * s;
-      int len;
+      STRLEN len;
       
       s = SvPV(str, len);
 

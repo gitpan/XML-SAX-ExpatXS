@@ -9,7 +9,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.31';
+$VERSION = '1.32';
 @ISA = qw(DynaLoader XML::SAX::Base XML::SAX::ExpatXS::Preload);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -18,9 +18,9 @@ my @features = (
 	['http://xml.org/sax/features/namespaces', 1],
 	['http://xml.org/sax/features/external-general-entities', 1],
 	['http://xml.org/sax/features/external-parameter-entities', 0],
-        ['http://xml.org/sax/features/xmlns-uris', 0],
-        ['http://xmlns.perl.org/sax/xmlns-uris', 1],
-        ['http://xmlns.perl.org/sax/version-2.1', 1],
+    ['http://xml.org/sax/features/xmlns-uris', 0],
+    ['http://xmlns.perl.org/sax/xmlns-uris', 1],
+    ['http://xmlns.perl.org/sax/version-2.1', 1],
 	['http://xmlns.perl.org/sax/join-character-data', 1],
 	['http://xmlns.perl.org/sax/ns-attributes', 1],
 	['http://xmlns.perl.org/sax/locator', 1],

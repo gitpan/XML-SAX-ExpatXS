@@ -1,3 +1,5 @@
+# $Id: Encoding.pm,v 1.2 2004/05/15 15:56:26 cvspetr Exp $
+
 package XML::SAX::ExpatXS::Encoding;
 require 5.004;
 
