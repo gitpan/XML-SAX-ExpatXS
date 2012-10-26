@@ -1,9 +1,13 @@
 Revision history for Perl extension XML::SAX::ExpatXS
 =====================================================
+ 
+1.33 Oct 26, 2012 
+    - LICENSE field added to ExpatXS.pm
+    - [rt.cpan.org #69253] t/f08noexpand.t is missing in distro ()
 
 1.32 Apr 12, 2011
-	- NoExpand option test added
-	- type warnings fixed (gcc 4.4)
+    - NoExpand option test added
+    - type warnings fixed (gcc 4.4)
 
 1.31 July 3, 2007
     - Security fix: namespace separator in XML_ParserCreate_MM

@@ -9,7 +9,7 @@ use DynaLoader ();
 use Carp;
 use IO::File;
 
-$VERSION = '1.32';
+$VERSION = '1.33';
 @ISA = qw(DynaLoader XML::SAX::Base XML::SAX::ExpatXS::Preload);
 
 XML::SAX::ExpatXS->bootstrap($VERSION);
@@ -339,7 +339,16 @@ expat_1.95.7.
 
 =head1 AUTHORS
 
- Petr Cimprich <petr AT gingerall DOT org> (maintainer)
+ Petr Cimprich <pcimprich AT gmail DOT com> (maintainer)
  Matt Sergeant <matt AT sergeant DOT org>
+
+=head1 COPYRIGHT
+
+2002-2004 Matt Sergeant, 2004-2011 Petr Cimprich. All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
 
 =cut

@@ -93,9 +93,12 @@ WriteMakefile(
     NAME => 'XML::SAX::ExpatXS',
     VERSION_FROM => 'lib/XML/SAX/ExpatXS.pm',
     PREREQ_PM => {
-		    'XML::SAX' => 0.13,
+		    'XML::SAX' => 0.96,
 		   },
     LIBS => $libs,
+	ABSTRACT => 'Perl SAX 2 XS extension to Expat parser',
+	AUTHOR => 'Petr Cimprich <pcimprich AT gmail DOT com>',
+	LICENSE => 'perl',
     @extras
 );
 
